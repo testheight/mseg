@@ -583,7 +583,7 @@ class SwinTransformerSys(nn.Module):
         return flops
 
 class SwinUnet(nn.Module):
-    def __init__(self, img_size=224, num_classes=3, zero_head=False, vis=False):
+    def __init__(self, img_size=512, num_classes=2, zero_head=False, vis=False):
         super(SwinUnet, self).__init__()
         self.num_classes = num_classes
         self.zero_head = zero_head
@@ -652,7 +652,6 @@ class SwinUnet(nn.Module):
 
 if __name__ == "__main__":
     net = SwinUnet(
-        img_size=512, 
         num_classes=2
     )
     x = torch.rand(1,3,512,512)

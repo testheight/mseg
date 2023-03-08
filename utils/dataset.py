@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader,Dataset
 from torch.utils.data import random_split
 
 class train_Dataset(Dataset):
-    def __init__(self,data_dir):
+    def __init__(self,data_dir,input_size):
         #建立数据列表
         images,labels = [],[]
         for name in os.listdir(os.path.join(data_dir,'imgs','train')):
@@ -14,6 +14,7 @@ class train_Dataset(Dataset):
                 labels.append(os.path.join(data_dir,'anno','train',name.split('.')[0]+'.png'))
         self.labels = labels 
         self.images = images
+        self.input_size = input_size #list[]
 
     #获取图像    
     def __getitem__(self, index):
@@ -24,7 +25,7 @@ class train_Dataset(Dataset):
         lbls = cv2.imread(label_path,cv2.IMREAD_GRAYSCALE)
         #数据增强
         transform = A.Compose([
-                A.RandomResizedCrop(height=512,width=512,scale=(0.15, 1.0)),    #旋转
+                A.RandomResizedCrop(height=self.input_size[0],width=self.input_size[1],scale=(0.15, 1.0)),    #旋转
                 A.Rotate(p=0.3),                                                #翻转
                 A.HorizontalFlip(p=0.3),                                        #水平翻转
                 A.VerticalFlip(p=0.2),                                          #垂直翻转

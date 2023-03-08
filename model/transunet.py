@@ -143,10 +143,7 @@ class TransUNet(nn.Module):
 
         return x
 
-
-if __name__ == '__main__':
-    import torch
-
+def TransUNet_512(num_classes=2):
     transunet = TransUNet(img_dim=512,
                           in_channels=3,
                           out_channels=128,
@@ -154,7 +151,10 @@ if __name__ == '__main__':
                           mlp_dim=512,
                           block_num=8,
                           patch_dim=16,
-                          class_num=2)
+                          class_num=num_classes)
+    return transunet
 
+if __name__ == '__main__':
+    transunet = TransUNet_512(num_classes=2)
     print(sum(p.numel() for p in transunet.parameters()))
     print(transunet(torch.randn(1, 3, 512, 512)).shape)

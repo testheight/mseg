@@ -73,13 +73,13 @@ class OutConv(nn.Module):
         return self.conv(x)
 
 class UNet(nn.Module):
-    def __init__(self, n_channels=3, n_classes=2, bilinear=True):
+    def __init__(self, num_classes=2, bilinear=True):
         super(UNet, self).__init__()
-        self.n_channels = n_channels
-        self.n_classes = n_classes
+        self.n_channels = 3
+        self.n_classes = num_classes
         self.bilinear = bilinear
 
-        self.inc = DoubleConv(n_channels, 64)
+        self.inc = DoubleConv(3, 64)
         self.down1 = Down(64, 128)
         self.down2 = Down(128, 256)
         self.down3 = Down(256, 512)
@@ -88,7 +88,7 @@ class UNet(nn.Module):
         self.up2 = Up(512, 128, bilinear)
         self.up3 = Up(256, 64, bilinear)
         self.up4 = Up(128, 64, bilinear)
-        self.outc = OutConv(64, n_classes)
+        self.outc = OutConv(64, num_classes)
 
     def forward(self, x):
         x1 = self.inc(x)
@@ -104,7 +104,7 @@ class UNet(nn.Module):
         return logits
 
 if __name__ == '__main__':
-    net = UNet(n_channels=3, n_classes=2)
+    net = UNet(n_classes=2)
     print(net)
 
     input  = torch.rand(2,3,512,512)
