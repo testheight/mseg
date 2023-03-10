@@ -33,8 +33,8 @@ def get_arguments():
     ###### ------------ 模型训练相关设置 ----------- ######
     parser.add_argument("--epochs", type=int, default=100,
                         help="train epochs.")
-    parser.add_argument("--optimizer", type=str, default="RMSprop",
-                        help="[SGD, adam ,RMSprop].")
+    parser.add_argument("--optimizer", type=str, default="adamw",
+                        help="[SGD, adam ,adamw,RMSprop].")
     parser.add_argument("--lr_scheduler", type=str, default="ExponentialLR",
                         help="[ExponentialLR].")
     parser.add_argument("--criterion", type=str, default="CrossEntropy_Loss",
@@ -65,7 +65,6 @@ def main(config):
     
     # log文件设置
     logger = log_output(save_pth)
-    logger.info('epochs: {}, batch_size: {}, lr: {}'.format(config.epochs,config.batch_size,config.lr))
 
     # 加载训练集(划分训练和验证机的比例)
     all_dataset = train_Dataset(config.data_dir,config.input_size)
@@ -78,13 +77,19 @@ def main(config):
     
     #加载模型
     net = eval(config.arch)(config.num_classes)
-    logger.info(net)
     # 定义优化器算法
     optimizer = eval(config.optimizer)(net, lr=config.lr)
     # 学习率优化算法
     scheduler = eval(config.lr_scheduler)(optimizer)
     # 定义Loss算法
     criterion = eval(config.criterion)()
+
+    # 打印各种参数
+    logger.info('epochs: {}, batch_size: {}, lr: {}'.format(config.epochs,config.batch_size,config.lr))
+    logger.info(net)
+    logger.info(optimizer.state_dict())
+    logger.info(criterion)
+
     #初始化混合精度
     scaler = GradScaler()
     # best_loss统计，初始化为正无穷
@@ -133,7 +138,6 @@ def main(config):
                     pred = (torch.nn.functional.softmax(pred[0],dim=0)).data.cpu()
                     pred = np.array(pred.argmax(axis=0))
                     label = np.array(label)
-
 
                     if len(label.flatten()) != len(pred.flatten()):
                         print('Skipping: 预测和标签数据不相等')
