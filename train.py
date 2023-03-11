@@ -88,7 +88,9 @@ def main(config):
     # 打印各种参数
     logger.info('epochs: {}, batch_size: {}, lr: {}'.format(config.epochs,config.batch_size,config.lr))
     logger.info(net)
+    logger.info(config.optimizer)
     logger.info(optimizer.state_dict())
+    logger.info(config.lr_scheduler)
     logger.info(criterion)
 
     #初始化混合精度
