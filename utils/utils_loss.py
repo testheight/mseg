@@ -92,4 +92,58 @@ class CriterionOhemDSN(nn.Module):
         scale_pred = F.interpolate(input=preds[1], size=(h, w), mode='bilinear', align_corners=True)
         loss2 = self.criterion2(scale_pred, target)
 
-        return loss1 + loss2 * 0.4
+        return loss1 + loss2 * 0.4  
+
+#focal loss(预防正负样本不平衡)
+def focal_loss(output, target,alpha=0.5, gamma=2):
+    logpt  = -nn.CrossEntropyLoss(reduction='none')(output, target)
+    pt = torch.exp(logpt)
+    if alpha is not None:
+        logpt *= alpha
+    loss = -((1 - pt) ** gamma) * logpt
+    loss = loss.mean()
+    return loss
+
+def target_trans(target,num_classes):
+    # target.shape为（n,h,w,class+1）
+    for i in range(target.shape[0]):
+        label = target[i].long()
+        h,w = label.shape
+        label[label >= num_classes] = num_classes
+        #-------------------------------------------------------#
+        #   转化成one_hot的形式
+        #   在这里需要+1是因为voc数据集有些标签具有白边部分
+        #   我们需要将白边部分进行忽略，+1的目的是方便忽略。
+        #-------------------------------------------------------#
+        # a = 
+        if torch.cuda.is_available():
+            seg_labels  = torch.eye(num_classes + 1).to(torch.device('cuda:0'))[label.reshape([-1])]
+        else:
+            seg_labels  = torch.eye(num_classes + 1)[label.reshape([-1])]
+        seg_labels  = seg_labels.reshape((int(h), int(w),num_classes + 1))
+        if i ==0:
+            final_torch =  torch.unsqueeze(seg_labels,dim=0)
+        else:
+            temp_torch2 = torch.unsqueeze(seg_labels,dim=0)
+            final_torch = torch.cat((final_torch,temp_torch2),dim=0)
+    return final_torch
+
+#dice_loss
+def Dice_loss(inputs, target, beta=1, smooth = 1e-5,num_classes=2):
+    #转换traget向量
+    temp_torch = target_trans(target,num_classes)
+    n, c, h, w = inputs.size()
+    nt, ht, wt, ct = temp_torch.size()
+
+    temp_inputs = torch.softmax(inputs.transpose(1, 2).transpose(2, 3).contiguous().view(n, -1, c),-1)
+    temp_target = temp_torch.view(n, -1, ct)
+    #--------------------------------------------#
+    #   计算dice loss
+    #--------------------------------------------#
+    tp = torch.sum(temp_target[...,:-1] * temp_inputs, axis=[0,1])
+    fp = torch.sum(temp_inputs                       , axis=[0,1]) - tp
+    fn = torch.sum(temp_target[...,:-1]              , axis=[0,1]) - tp
+
+    score = ((1 + beta ** 2) * tp + smooth) / ((1 + beta ** 2) * tp + beta ** 2 * fn + fp + smooth)
+    dice_loss = 1 - torch.mean(score)
+    return dice_loss

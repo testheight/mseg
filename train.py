@@ -6,6 +6,7 @@ from torch.cuda.amp import autocast, GradScaler
 
 from model import UNet,TransUNet,SwinUnet
 from utils import train_Dataset,log_output,fast_hist,per_class_iu,per_class_PA_Recall,per_class_Precision
+from utils import adamw
 
 def get_arguments():
 
@@ -76,7 +77,7 @@ def main(config):
                                                shuffle=True)
     
     #加载模型
-    net = eval(config.arch)(config.num_classes)
+    net = eval(config.arch)(config.num_classes).to(device=device)
     # 定义优化器算法
     optimizer = eval(config.optimizer)(net, lr=config.lr)
     # 学习率优化算法
