@@ -17,7 +17,7 @@ def get_arguments():
     parser.add_argument("--data_dir", type=str, help="datasets path",
                         default="D:\\software\\Code\codefile\\image_result\\mydata\\model_test_data")
     parser.add_argument("--save_dir", type=str,help="save path .",
-                        default="D:\\software\\Code\\codefile\\mseg\\result")
+                        default="D:\\software\\Code\\codefile\\mseg\\results")
     parser.add_argument("--input_size", type=list, default=[512,512],
                         help="Comma-separated string with height and width of images.")
     parser.add_argument("--traindata_rate", type=int, default=0.9,
@@ -88,7 +88,7 @@ def main(config):
     # 打印各种参数
     logger.info('epochs: {}, batch_size: {}, lr: {}'.format(config.epochs,config.batch_size,config.lr))
     logger.info(net)
-    logger.info(config.optimizer)
+    logger.info('optimizer:{}'.format(config.optimizer))
     logger.info(optimizer.state_dict())
     logger.info(config.lr_scheduler)
     logger.info(criterion)
