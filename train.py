@@ -4,7 +4,7 @@ import numpy as np
 from tqdm import tqdm
 from torch.cuda.amp import autocast, GradScaler
 
-from model import UNet,TransUNet,SwinUnet,deeplabv3p
+from model import UNet,TransUNet,SwinUnet,deeplabv3p,m_segformer
 from utils import train_Dataset,log_output,fast_hist,per_class_iu,per_class_PA_Recall,per_class_Precision
 from utils import adamw,ExponentialLR,CrossEntropy_Loss
 
@@ -15,17 +15,17 @@ def get_arguments():
     parser.add_argument("--batch_size", type=int, default=4,
                         help="Number of images sent to the network in one step.")
     parser.add_argument("--data_dir", type=str, help="datasets path",
-                        default="D:\\software\\Code\codefile\\image_result\\mydata\\model_test_data")
+                        default="D:\\software\\Code\\codefile\\mseg\\results")#D:\\software\\Code\codefile\\image_result\\mydata\\model_test_data
     parser.add_argument("--save_dir", type=str,help="save path .",
-                        default="D:\\software\\Code\\codefile\\mseg\\results")
+                        default="D:\\software\\Code\\codefile\\mseg\\results")#D:\\software\\Code\\codefile\\mseg\\results
     parser.add_argument("--input_size", type=list, default=[512,512],
                         help="Comma-separated string with height and width of images.")
     parser.add_argument("--traindata_rate", type=int, default=0.9,
                         help="Proportion of training datasets.") 
     
     ###### ------------ 设置模型 --------------- ######
-    parser.add_argument("--arch", type=str, default="deeplabv3p", 
-                        help="[UNet,TransUNet,SwinUnet,DualSeg_res101,deeplabv3p]")
+    parser.add_argument("--arch", type=str, default="m_segformer", 
+                        help="[UNet, TransUNet, SwinUnet, DualSeg_res101, deeplabv3p, m_segformer]")
     parser.add_argument("--num_classes", type=int, default=2,
                         help="Number of classes to predict (including background).")
     parser.add_argument("--name_classes", type=list, default=["background", "root"],

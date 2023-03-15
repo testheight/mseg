@@ -5,7 +5,7 @@ def SGD(net,lr=0.01):
     optimizer = torch.optim.SGD(net.parameters(), lr=lr,momentum=0.9,weight_decay=0.0005)
     return optimizer
 
-def adam(net,lr=0.01,betas=()):
+def adam(net,lr=0.01,betas=(0.9,0.999)):
     optimizer = torch.optim.Adam(net.parameters(), lr=lr, betas=betas)
     return optimizer
 
