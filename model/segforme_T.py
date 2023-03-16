@@ -163,6 +163,42 @@ class MiT(nn.Module):
         ret = x if not return_layer_outputs else layer_outputs
         return ret
 
+#上采样
+class up_conv(nn.Module):
+    """
+    Up Convolution Block
+    """
+    def __init__(self, in_ch, out_ch):
+        super(up_conv, self).__init__()
+        self.up = nn.Sequential(
+            nn.Upsample(scale_factor=2),
+            nn.Conv2d(in_ch, out_ch, kernel_size=3, stride=1, padding=1, bias=True),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=True)
+        )
+
+    def forward(self, x):
+        x = self.up(x)
+        return x
+
+# 双卷积
+class DoubleConv(nn.Module):
+    """(convolution => [BN] => ReLU) * 2"""
+
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.double_conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
+        )
+
+    def forward(self, x):
+        return self.double_conv(x)
+
 class Segformer(nn.Module):
     def __init__(
         self,
@@ -174,7 +210,7 @@ class Segformer(nn.Module):
         num_layers = 2,
         channels = 3,
         decoder_dim = 256,
-        num_classes = 4
+        num_classes = 2
     ):
         super().__init__()
         dims, heads, ff_expansion, reduction_ratio, num_layers = map(partial(cast_tuple, depth = 4), (dims, heads, ff_expansion, reduction_ratio, num_layers))
@@ -188,23 +224,47 @@ class Segformer(nn.Module):
             reduction_ratio = reduction_ratio,
             num_layers = num_layers
         )
+        
+        # 原始特征融合方法
+        # self.to_fused = nn.ModuleList([nn.Sequential(
+        #     nn.Conv2d(dim, decoder_dim, 1),
+        #     nn.Upsample(scale_factor = 2 ** i)
+        # ) for i, dim in enumerate(dims)])
 
-        self.to_fused = nn.ModuleList([nn.Sequential(
-            nn.Conv2d(dim, decoder_dim, 1),
-            nn.Upsample(scale_factor = 2 ** i)
-        ) for i, dim in enumerate(dims)])
-
+        #原始方法
+        # self.to_segmentation = nn.Sequential(
+        #     nn.Conv2d(4 * decoder_dim, decoder_dim, 1),
+        #     nn.Conv2d(decoder_dim, num_classes, 1),
+        #     ##(2,2,128,128)
+        #     nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False)
+        # )
+        #改方法1(亚像素)
+        # self.to_segmentation1 = nn.Sequential(
+        #     nn.PixelShuffle(4),
+        #     nn.Conv2d(decoder_dim//4, num_classes, 1),
+        # )
+        #改方法2(反卷积)
+        # self.to_segmentation2 = nn.Sequential(
+        #     nn.Conv2d(4 * decoder_dim, decoder_dim, 1),
+        #     #(1,256,128,128)
+        #     nn.ConvTranspose2d(decoder_dim,decoder_dim//2, kernel_size=2, stride=2),
+        #     #(1,128,256,256)
+        #     nn.ConvTranspose2d(decoder_dim//2,num_classes, kernel_size=2, stride=2),
+        #     #(1,2,512,512)
+        # )
+        
+        #改进类似unet
+        self.dc1 = DoubleConv(dims[-1],dims[-1])
+        self.up1 = up_conv(dims[-1],dims[-2])
+        self.dc2 = DoubleConv(dims[-2]*2,dims[-2])
+        self.up2 = up_conv(dims[-2],dims[-3])
+        self.dc3 = DoubleConv(dims[-3]*2,dims[-3])
+        self.up3 = up_conv(dims[-3],dims[0])
+        self.dc4 = DoubleConv(dims[0]*2,dims[0])
         self.to_segmentation = nn.Sequential(
-            nn.Conv2d(4 * decoder_dim, decoder_dim, 1),
-            nn.Conv2d(decoder_dim, num_classes, 1),
-            ##(2,2,128,128)
-            nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False)
+            nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False),
+            nn.Conv2d(dims[0], num_classes, 1),
         )
-        self.to_segmentation2 = nn.Sequential(
-            nn.PixelShuffle(4),
-            nn.Conv2d(decoder_dim//4, num_classes, 1),
-        )
-
 
     def forward(self, x):
         b,n,h,w = x.shape
@@ -212,15 +272,22 @@ class Segformer(nn.Module):
         layer_outputs = self.mit(x, return_layer_outputs = True)
         #(2,32,128,128),(2,64,64,64),(2,160,32,32),(2,256,16,16)
 
-        fused = [to_fused(output) for output, to_fused in zip(layer_outputs, self.to_fused)]
-        fused = torch.cat(fused, dim = 1)
-        #(2,1024,128,128)
+        # 原始的方法
+        # fused = [to_fused(output) for output, to_fused in zip(layer_outputs, self.to_fused)]
+        # fused = torch.cat(fused, dim = 1)
+        # (2,1024,128,128)
+        # output = self.to_segmentation2(fused)
+        # (2,2,512,512)
 
-        ## method1
-        output = self.to_segmentation2(fused)
-        #(2,2,512,512)
-        ## method2
-
+        # 改进方法
+        x4 = self.dc1(layer_outputs[-1])
+        x4_s = self.up1(x4)
+        x3 = self.dc2(torch.cat([x4_s,layer_outputs[-2]], dim=1))
+        x3_s =  self.up2(x3)
+        x2 = self.dc3(torch.cat([x3_s,layer_outputs[-3]], dim=1))
+        x2_s =  self.up3(x2)
+        x1 = self.dc4(torch.cat([x2_s,layer_outputs[0]], dim=1))
+        output = self.to_segmentation(x1)
         return output
     
 def m_segformer(num_classes=2):
@@ -239,7 +306,7 @@ if __name__ =="__main__":
     model = m_segformer()
     x = torch.randn(2, 3, 512, 512)
     pred = model(x)
-    print(pred.shape)
+    # print(pred.shape)
     # print(model)
     # y = mit(x)
     # print(y.shape)
