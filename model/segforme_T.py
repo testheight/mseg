@@ -214,17 +214,12 @@ class MiT(nn.Module):
         return ret
 
 class Segformer_primary(nn.Module):
+    '''
+    原始方法
+    '''
     def __init__(
-        self,
-        *,
-        dims = (32, 64, 160, 256),
-        heads = (1, 2, 5, 8),
-        ff_expansion = (8, 8, 4, 4),
-        reduction_ratio = (8, 4, 2, 1),
-        num_layers = 2,
-        channels = 3,
-        decoder_dim = 256,
-        num_classes = 2
+        self, *, dims = (32, 64, 160, 256), heads = (1, 2, 5, 8), ff_expansion = (8, 8, 4, 4),
+        reduction_ratio = (8, 4, 2, 1), num_layers = 2, channels = 3, decoder_dim = 256, num_classes = 2
     ):
         super().__init__()
         dims, heads, ff_expansion, reduction_ratio, num_layers = map(partial(cast_tuple, depth = 4), (dims, heads, ff_expansion, reduction_ratio, num_layers))
@@ -236,8 +231,7 @@ class Segformer_primary(nn.Module):
             heads = heads,
             ff_expansion = ff_expansion,
             reduction_ratio = reduction_ratio,
-            num_layers = num_layers
-        )
+            num_layers = num_layers)
         
         # 原始特征融合方法
         self.to_fused = nn.ModuleList([nn.Sequential(
@@ -250,8 +244,8 @@ class Segformer_primary(nn.Module):
             nn.Conv2d(4 * decoder_dim, decoder_dim, 1),
             nn.Conv2d(decoder_dim, num_classes, 1),
             ##(2,2,128,128)
-            nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False)
-        )
+            nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False))
+        
     def forward(self, x):           
         b,n,h,w = x.shape
         #(2,3,512,512)
@@ -267,17 +261,12 @@ class Segformer_primary(nn.Module):
         return output
 
 class Segformer_upsample(nn.Module):
+    '''
+    改变上采样方法（亚像素和反卷积）
+    '''
     def __init__(
-        self,
-        *,
-        dims = (32, 64, 160, 256),
-        heads = (1, 2, 5, 8),
-        ff_expansion = (8, 8, 4, 4),
-        reduction_ratio = (8, 4, 2, 1),
-        num_layers = 2,
-        channels = 3,
-        decoder_dim = 256,
-        num_classes = 2
+        self, *, dims = (32, 64, 160, 256), heads = (1, 2, 5, 8), ff_expansion = (8, 8, 4, 4),
+        reduction_ratio = (8, 4, 2, 1), num_layers = 2, channels = 3, decoder_dim = 256, num_classes = 2
     ):
         super().__init__()
         dims, heads, ff_expansion, reduction_ratio, num_layers = map(partial(cast_tuple, depth = 4), (dims, heads, ff_expansion, reduction_ratio, num_layers))
@@ -289,8 +278,7 @@ class Segformer_upsample(nn.Module):
             heads = heads,
             ff_expansion = ff_expansion,
             reduction_ratio = reduction_ratio,
-            num_layers = num_layers
-        )
+            num_layers = num_layers)
         
         # 原始特征融合方法
         self.to_fused = nn.ModuleList([nn.Sequential(
@@ -301,17 +289,17 @@ class Segformer_upsample(nn.Module):
         # 改方法1(亚像素)
         self.to_segmentation1 = nn.Sequential(
             nn.PixelShuffle(4),
-            nn.Conv2d(decoder_dim//4, num_classes, 1),
-        )
+            nn.Conv2d(decoder_dim//4, num_classes, 1),)
+        
         # 改方法2(反卷积)
         self.to_segmentation2 = nn.Sequential(
             nn.Conv2d(4 * decoder_dim, decoder_dim, 1),
             #(1,256,128,128)
             nn.ConvTranspose2d(decoder_dim,decoder_dim//2, kernel_size=2, stride=2),
             #(1,128,256,256)
-            nn.ConvTranspose2d(decoder_dim//2,num_classes, kernel_size=2, stride=2),
+            nn.ConvTranspose2d(decoder_dim//2,num_classes, kernel_size=2, stride=2),)
             #(1,2,512,512)
-        )
+
     def forward(self, x):           
         b,n,h,w = x.shape
         #(2,3,512,512)
@@ -327,17 +315,12 @@ class Segformer_upsample(nn.Module):
         return output
 
 class Segformer_unet(nn.Module):
+    '''
+    采用类似unet的解码器结构  +  有无低维特征提取
+    '''
     def __init__(
-        self,
-        *,
-        dims = (32, 64, 160, 256),
-        heads = (1, 2, 5, 8),
-        ff_expansion = (8, 8, 4, 4),
-        reduction_ratio = (8, 4, 2, 1),
-        num_layers = 2,
-        channels = 3,
-        decoder_dim = 256,
-        num_classes = 2
+        self, *, dims = (32, 64, 160, 256), heads = (1, 2, 5, 8), ff_expansion = (8, 8, 4, 4),
+        reduction_ratio = (8, 4, 2, 1), num_layers = 2, channels = 3, decoder_dim = 256, num_classes = 2
     ):
         super().__init__()
         dims, heads, ff_expansion, reduction_ratio, num_layers = map(partial(cast_tuple, depth = 4), (dims, heads, ff_expansion, reduction_ratio, num_layers))
@@ -349,8 +332,7 @@ class Segformer_unet(nn.Module):
             heads = heads,
             ff_expansion = ff_expansion,
             reduction_ratio = reduction_ratio,
-            num_layers = num_layers
-        )
+            num_layers = num_layers)
         
         # 改进类似unet解码结构 method1
         # self.dc1 = DoubleConv(dims[-1],dims[-1])
@@ -362,9 +344,7 @@ class Segformer_unet(nn.Module):
         # self.dc4 = DoubleConv(dims[0]*2,dims[0])
         # self.to_segmentation = nn.Sequential(
         #     nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False),
-        #     nn.Conv2d(dims[0], num_classes, 1),
-        # )
-
+        #     nn.Conv2d(dims[0], num_classes, 1),)
 
         ## 改进类似unet解码结构（增加低维卷积特征提取）  method2  
         self.low_conv = SingleConv(3, dims[0], kernel_size=7, stride=2, padding=3)
@@ -416,17 +396,12 @@ class Segformer_unet(nn.Module):
         return output
 
 class Segformer_deeplabv3plus(nn.Module):
+    '''
+    采用类似deeplabv3plus的解码器结构  +  有无低维特征提取
+    '''
     def __init__(
-        self,
-        *,
-        dims = (32, 64, 160, 256),
-        heads = (1, 2, 5, 8),
-        ff_expansion = (8, 8, 4, 4),
-        reduction_ratio = (8, 4, 2, 1),
-        num_layers = 2,
-        channels = 3,
-        decoder_dim = 256,
-        num_classes = 2
+        self, *, dims = (32, 64, 160, 256), heads = (1, 2, 5, 8), ff_expansion = (8, 8, 4, 4),
+        reduction_ratio = (8, 4, 2, 1), num_layers = 2, channels = 3, decoder_dim = 256, num_classes = 2
     ):
         super().__init__()
         dims, heads, ff_expansion, reduction_ratio, num_layers = map(partial(cast_tuple, depth = 4), (dims, heads, ff_expansion, reduction_ratio, num_layers))
@@ -482,7 +457,7 @@ class Segformer_deeplabv3plus(nn.Module):
 
 def m_segformer_T(num_classes=2):
     '''
-    调用
+    调用 模型
     '''
     model = Segformer_deeplabv3plus(
     dims = (32, 64, 160, 256),      # dimensions of each stage
