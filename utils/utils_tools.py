@@ -22,6 +22,11 @@ def ExponentialLR(optimizer,gamma=0.8):
     scheduler=torch.optim.lr_scheduler.ExponentialLR(optimizer,gamma=gamma)
     return scheduler
 
+# 余弦退火
+def CosLR(optimizer):
+    scheduler=torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,T_max=20,)
+    return scheduler
+
 # 创建学习率更新策略，这里是每个step更新一次学习率，以及使用warmup
 def create_lr_scheduler(optimizer,
                         num_step: int,

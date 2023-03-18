@@ -6,7 +6,7 @@ from torch.cuda.amp import autocast, GradScaler
 
 from model import UNet,TransUNet,SwinUnet,deeplabv3p,m_segformer
 from utils import train_Dataset,log_output,fast_hist,per_class_iu,per_class_PA_Recall,per_class_Precision
-from utils import adamw,ExponentialLR,CrossEntropy_Loss
+from utils import adamw,ExponentialLR,CosLR,CrossEntropy_Loss
 
 def get_arguments():
 
