@@ -6,7 +6,7 @@ from torch.cuda.amp import autocast, GradScaler
 
 from model import UNet,TransUNet,SwinUnet,deeplabv3p,m_segformer
 from utils import train_Dataset,log_output,fast_hist,per_class_iu,per_class_PA_Recall,per_class_Precision
-from utils import adamw,ExponentialLR,CosLR,CrossEntropy_Loss
+from utils import adamw,ExponentialLR,CosLR,CrossEntropy_Loss,focal_loss
 
 def get_arguments():
 
@@ -15,7 +15,7 @@ def get_arguments():
     parser.add_argument("--batch_size", type=int, default=4,
                         help="Number of images sent to the network in one step.")
     parser.add_argument("--data_dir", type=str, help="datasets path",
-                        default="D:\\software\\Code\\codefile\\mseg\\results")#D:\\software\\Code\codefile\\image_result\\mydata\\model_test_data
+                        default="D:\\software\\Code\\codefile\\image_result\\mydata\\model_test_data")#D:\\software\\Code\codefile\\image_result\\mydata\\model_test_data
     parser.add_argument("--save_dir", type=str,help="save path .",
                         default="D:\\software\\Code\\codefile\\mseg\\results")#D:\\software\\Code\\codefile\\mseg\\results
     parser.add_argument("--input_size", type=list, default=[512,512],
@@ -36,11 +36,11 @@ def get_arguments():
                         help="train epochs.")
     parser.add_argument("--optimizer", type=str, default="adamw",
                         help="[SGD, adam ,adamw,RMSprop].")
-    parser.add_argument("--lr_scheduler", type=str, default="ExponentialLR",
-                        help="[ExponentialLR].")
-    parser.add_argument("--criterion", type=str, default="CrossEntropy_Loss",
-                        help="[CriterionOhemDSN, CriterionDSN ,CrossEntropy_Loss].")
-    parser.add_argument("--lr", type=float, default=1e-2,
+    parser.add_argument("--lr_scheduler", type=str, default="CosLR",
+                        help="[ExponentialLR,CosLR].")
+    parser.add_argument("--criterion", type=str, default="focal_loss",
+                        help="[CriterionOhemDSN, CriterionDSN ,CrossEntropy_Loss,focal_loss].")
+    parser.add_argument("--lr", type=float, default=1e-4,
                         help="Base learning rate for training with polynomial decay.")
     parser.add_argument("--momentum", type=float, default=0.9,
                         help="Momentum component of the optimiser.")
@@ -83,7 +83,7 @@ def main(config):
     # 学习率优化算法
     scheduler = eval(config.lr_scheduler)(optimizer)
     # 定义Loss算法
-    criterion = eval(config.criterion)()
+    criterion = eval(config.criterion)
 
     # 打印各种参数
     logger.info('epochs: {}, batch_size: {}, lr: {}'.format(config.epochs,config.batch_size,config.lr))
@@ -128,7 +128,7 @@ def main(config):
         scheduler.step()
 
         #模型验证
-        if len(trainval_dataset) !=0 and (epoch+1) % 5==0:
+        if len(trainval_dataset) !=0 and (epoch+1) % 2==0:
             net.eval()
             with torch.no_grad():
                 hist = np.zeros((config.num_classes, config.num_classes))

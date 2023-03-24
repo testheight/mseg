@@ -99,9 +99,9 @@ def focal_loss(output, target,alpha=0.5, gamma=2):
     logpt  = -nn.CrossEntropyLoss(reduction='none')(output, target)
     pt = torch.exp(logpt)
     if alpha is not None:
-        logpt *= alpha
-    loss = -((1 - pt) ** gamma) * logpt
-    loss = loss.mean()
+        logpt = torch.mul(logpt,alpha)
+    loss = -torch.mul((torch.sub(1,pt).pow(gamma)) , logpt)
+    loss = torch.mean(loss)
     return loss
 
 def target_trans(target,num_classes):

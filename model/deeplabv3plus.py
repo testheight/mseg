@@ -13,5 +13,6 @@ def deeplabv3p(num_classes=2):
 if __name__ == "__main__":
     a = torch.rand(2,3,512,512)
     net = deeplabv3p()
+    print(net)
     mask = net(a)
     print(mask.shape)

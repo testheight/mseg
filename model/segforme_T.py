@@ -1,11 +1,12 @@
 from math import sqrt
 from functools import partial
-import torch
+import torch,math
 from torch import nn, einsum
 import torch.nn.functional as F
 
 from einops import rearrange, reduce
 from einops.layers.torch import Rearrange
+from timm.models.layers import  trunc_normal_
 
 # helpers
 
@@ -14,6 +15,55 @@ def exists(val):
 
 def cast_tuple(val, depth):
     return val if isinstance(val, tuple) else (val,) * depth
+
+# 通道注意力机制
+class ChannelAttention(nn.Module):
+    def __init__(self, in_planes, ratio=8):
+        super(ChannelAttention, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.max_pool = nn.AdaptiveMaxPool2d(1)
+ 
+        # 利用1x1卷积代替全连接
+        self.fc1   = nn.Conv2d(in_planes, in_planes // ratio, 1, bias=False)
+        self.relu1 = nn.ReLU()
+        self.fc2   = nn.Conv2d(in_planes // ratio, in_planes, 1, bias=False)
+ 
+        self.sigmoid = nn.Sigmoid()
+ 
+    def forward(self, x):
+        avg_out = self.fc2(self.relu1(self.fc1(self.avg_pool(x))))
+        max_out = self.fc2(self.relu1(self.fc1(self.max_pool(x))))
+        out = avg_out + max_out
+        return self.sigmoid(out)
+
+# 空间注意力
+class SpatialAttention(nn.Module):
+    def __init__(self, kernel_size=7):
+        super(SpatialAttention, self).__init__()
+ 
+        assert kernel_size in (3, 7), 'kernel size must be 3 or 7'
+        padding = 3 if kernel_size == 7 else 1
+        self.conv1 = nn.Conv2d(2, 1, kernel_size, padding=padding, bias=False)
+        self.sigmoid = nn.Sigmoid()
+ 
+    def forward(self, x):
+        avg_out = torch.mean(x, dim=1, keepdim=True)
+        max_out, _ = torch.max(x, dim=1, keepdim=True)
+        x = torch.cat([avg_out, max_out], dim=1)
+        x = self.conv1(x)
+        return self.sigmoid(x)
+ 
+# 双注意力
+class cbam_block(nn.Module):
+    def __init__(self, channel, ratio=8, kernel_size=7):
+        super(cbam_block, self).__init__()
+        self.channelattention = ChannelAttention(channel, ratio=ratio)
+        self.spatialattention = SpatialAttention(kernel_size=kernel_size)
+ 
+    def forward(self, x):
+        x = x * self.channelattention(x)
+        x = x * self.spatialattention(x)
+        return x
 
 #上采样
 class up_conv(nn.Module):
@@ -239,13 +289,37 @@ class Segformer_primary(nn.Module):
             nn.Upsample(scale_factor = 2 ** i)
         ) for i, dim in enumerate(dims)])
 
-        # 原始分类方法
+        # 原始分类方法      &&-----已训练-----&&
         self.to_segmentation = nn.Sequential(
             nn.Conv2d(4 * decoder_dim, decoder_dim, 1),
             nn.Conv2d(decoder_dim, num_classes, 1),
             ##(2,2,128,128)
             nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False))
         
+        # 改进最后的解码头   
+        self.to_segmentation = nn.Sequential(
+            nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False),
+            SingleConv(4 * decoder_dim, decoder_dim, 1),
+            nn.Conv2d(decoder_dim, num_classes, 1))
+        
+    #     #初始化函数方法
+    #     self.apply(self._init_weights)
+
+    # def _init_weights(self, m):
+    #     if isinstance(m, nn.Linear):
+    #         trunc_normal_(m.weight, std=.02)
+    #         if isinstance(m, nn.Linear) and m.bias is not None:
+    #             nn.init.constant_(m.bias, 0)
+    #     elif isinstance(m, nn.LayerNorm):
+    #         nn.init.constant_(m.bias, 0)
+    #         nn.init.constant_(m.weight, 1.0)
+    #     elif isinstance(m, nn.Conv2d):
+    #         fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+    #         fan_out //= m.groups
+    #         m.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
+    #         if m.bias is not None:
+    #             m.bias.data.zero_()
+
     def forward(self, x):           
         b,n,h,w = x.shape
         #(2,3,512,512)
@@ -286,12 +360,12 @@ class Segformer_upsample(nn.Module):
             nn.Upsample(scale_factor = 2 ** i)
         ) for i, dim in enumerate(dims)])
 
-        # 改方法1(亚像素)
+        # 改方法1(亚像素)   &&-----已训练-----&&
         self.to_segmentation1 = nn.Sequential(
             nn.PixelShuffle(4),
             nn.Conv2d(decoder_dim//4, num_classes, 1),)
         
-        # 改方法2(反卷积)
+        # 改方法2(反卷积)   &&-----已训练-----&&
         self.to_segmentation2 = nn.Sequential(
             nn.Conv2d(4 * decoder_dim, decoder_dim, 1),
             #(1,256,128,128)
@@ -334,7 +408,7 @@ class Segformer_unet(nn.Module):
             reduction_ratio = reduction_ratio,
             num_layers = num_layers)
         
-        # 改进类似unet解码结构 method1
+        # 改进类似unet解码结构 method1            &&-----已训练-----&&
         # self.dc1 = DoubleConv(dims[-1],dims[-1])
         # self.up1 = up_conv(dims[-1],dims[-2])
         # self.dc2 = DoubleConv(dims[-2]*2,dims[-2])
@@ -346,22 +420,40 @@ class Segformer_unet(nn.Module):
         #     nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False),
         #     nn.Conv2d(dims[0], num_classes, 1),)
 
-        ## 改进类似unet解码结构（增加低维卷积特征提取）  method2  
-        self.low_conv = SingleConv(3, dims[0], kernel_size=7, stride=2, padding=3)
-        self.dc1 = DoubleConv(dims[-1],dims[-1])
-        self.up1 = up_conv(dims[-1],dims[-2])
-        self.dc2 = DoubleConv(dims[-2]*2,dims[-2])
-        self.up2 = up_conv(dims[-2],dims[-3])
-        self.dc3 = DoubleConv(dims[-3]*2,dims[-3])
-        self.up3 = up_conv(dims[-3],dims[0])
-        self.dc4 = DoubleConv(dims[0]*2,dims[0])
+        # ## 改进类似unet解码结构（增加低维卷积特征提取）  method2     &&-----已训练-----&&
+        # self.low_conv = SingleConv(3, dims[0], kernel_size=7, stride=2, padding=3)
+        # self.dc1 = DoubleConv(dims[-1],dims[-1])
+        # self.up1 = up_conv(dims[-1],dims[-2])
+        # self.dc2 = DoubleConv(dims[-2]*2,dims[-2])
+        # self.up2 = up_conv(dims[-2],dims[-3])
+        # self.dc3 = DoubleConv(dims[-3]*2,dims[-3])
+        # self.up3 = up_conv(dims[-3],dims[0])
+        # self.dc4 = DoubleConv(dims[0]*2,dims[0])
+        # self.to_segmentation = nn.Sequential(
+        #     # nn.Conv2d(dims[0]*2,dims[0]*2,kernel_size=1),
+        #     # nn.BatchNorm2d(dims[0]*2),
+        #     # nn.ReLU(inplace=True),
+        #     SingleConv(dims[0]*2,dims[0]*2,kernel_size=1),
+        #     nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+        #     nn.Conv2d(dims[0]*2, num_classes, 1))
+
+        # 通道注意力机制加亚像素           
+        self.abam0 = cbam_block(dims[0])
+        self.abam1 = cbam_block(dims[1])
+        self.abam2 = cbam_block(dims[2])
+        self.abam3 = cbam_block(dims[3])
+
+        self.dc1 = DoubleConv(dims[3],dims[3])
+        self.up1 = nn.PixelShuffle(2)
+        self.dc2 = DoubleConv(dims[3]//4+dims[2],dims[2])
+        self.up2 = nn.PixelShuffle(2)
+        self.dc3 = DoubleConv(dims[2]//4+dims[1],dims[1])
+        self.up3 = nn.PixelShuffle(2)
+        self.dc4 = DoubleConv(dims[1]//4+dims[0],dims[0])
         self.to_segmentation = nn.Sequential(
-            # nn.Conv2d(dims[0]*2,dims[0]*2,kernel_size=1),
-            # nn.BatchNorm2d(dims[0]*2),
-            # nn.ReLU(inplace=True),
-            SingleConv(dims[0]*2,dims[0]*2,kernel_size=1),
-            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
-            nn.Conv2d(dims[0]*2, num_classes, 1))
+            nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False),
+            nn.Conv2d(dims[0], num_classes, 1),)
+
 
     def forward(self, x):           
         b,n,h,w = x.shape
@@ -370,6 +462,19 @@ class Segformer_unet(nn.Module):
         #(2,32,128,128),(2,64,64,64),(2,160,32,32),(2,256,16,16)
 
         # # methond1
+        # x_c = self.dc1(layer_outputs[3])
+        # x_c = self.up1(x_c)
+        # x_c = self.dc2(torch.cat([x_c,layer_outputs[2]], dim=1))
+        # x_c = self.up2(x_c)
+        # x_c = self.dc3(torch.cat([x_c,layer_outputs[1]], dim=1))
+        # x_c = self.up3(x_c)
+        # x_c = self.dc4(torch.cat([x_c,layer_outputs[0]], dim=1))
+        # # (2,32,128,128)
+        # output = self.to_segmentation(x_c)
+
+        # ## methond2 增加低维卷积特征提取
+        # x_l= self.low_conv(x)
+        # # (1,32,256,256)
         # x_c = self.dc1(layer_outputs[-1])
         # x_c = self.up1(x_c)
         # x_c = self.dc2(torch.cat([x_c,layer_outputs[-2]], dim=1))
@@ -378,20 +483,22 @@ class Segformer_unet(nn.Module):
         # x_c = self.up3(x_c)
         # x_c = self.dc4(torch.cat([x_c,layer_outputs[0]], dim=1))
         # # (2,32,128,128)
-        # output = self.to_segmentation(x_c)
+        # output = self.to_segmentation(torch.cat([F.interpolate(x_c,scale_factor=2),x_l],dim=1))
 
-        ## methond2 增加低维卷积特征提取
-        x_l= self.low_conv(x)
-        # (1,32,256,256)
-        x_c = self.dc1(layer_outputs[-1])
+        ## methond3 增加低维卷积特征提取
+        x_c = self.dc1(self.abam3(layer_outputs[3]))
+        # (2,256,16,16)
         x_c = self.up1(x_c)
-        x_c = self.dc2(torch.cat([x_c,layer_outputs[-2]], dim=1))
+        # (2,64,32,32)
+        x_c = torch.cat([x_c,self.abam2(layer_outputs[2])], dim=1)
+
+        x_c = self.dc2(x_c)
         x_c = self.up2(x_c)
-        x_c = self.dc3(torch.cat([x_c,layer_outputs[-3]], dim=1))
+        x_c = self.dc3(torch.cat([x_c,self.abam1(layer_outputs[1])], dim=1))
         x_c = self.up3(x_c)
-        x_c = self.dc4(torch.cat([x_c,layer_outputs[0]], dim=1))
+        x_c = self.dc4(torch.cat([x_c,self.abam0(layer_outputs[0])], dim=1))
         # (2,32,128,128)
-        output = self.to_segmentation(torch.cat([F.interpolate(x_c,scale_factor=2),x_l],dim=1))
+        output = self.to_segmentation(x_c)
 
         return output
 
@@ -416,7 +523,7 @@ class Segformer_deeplabv3plus(nn.Module):
             num_layers = num_layers
         )
         
-        ## 改进类似deeplabv3plus解码结构（增加低维卷积特征提取）
+        ## 改进类似deeplabv3plus解码结构（增加低维卷积特征提取）             &&-----已训练-----&&
         self.low_conv = SingleConv(3, dims[1], kernel_size=(7, 7), stride=(2, 2), padding=(3, 3))
 
         self.to_fused = nn.ModuleList([nn.Sequential(
@@ -457,9 +564,9 @@ class Segformer_deeplabv3plus(nn.Module):
 
 def m_segformer_T(num_classes=2):
     '''
-    调用 模型
+    调用 模型  Segformer_primary  
     '''
-    model = Segformer_deeplabv3plus(
+    model = Segformer_primary(
     dims = (32, 64, 160, 256),      # dimensions of each stage
     heads = (1, 2, 5, 8),           # heads of each stage
     ff_expansion = (8, 8, 4, 4),    # feedforward expansion factor of each stage
@@ -470,8 +577,25 @@ def m_segformer_T(num_classes=2):
     )
     return model
     
+def init_weights(m):
+    classname = m.__class__.__name__
+    if isinstance(m, nn.Linear):
+        trunc_normal_(m.weight, std=.02)
+        if isinstance(m, nn.Linear) and m.bias is not None:
+            nn.init.constant_(m.bias, 0)
+    elif isinstance(m, nn.LayerNorm):
+        nn.init.constant_(m.bias, 0)
+        nn.init.constant_(m.weight, 1.0)
+    elif isinstance(m, nn.Conv2d):
+        fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+        fan_out //= m.groups
+        m.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
+        if m.bias is not None:
+            m.bias.data.zero_()
+
 if __name__ =="__main__":
     model = m_segformer_T()
+    model.apply(init_weights)
     x = torch.randn(2, 3, 512, 512)
     pred = model(x)
     print(pred.shape)
