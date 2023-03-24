@@ -560,23 +560,7 @@ class Segformer_deeplabv3plus(nn.Module):
         # (2,320,256,256)
         output = self.to_segmentation(fused)
         return output
-
-
-def m_segformer_T(num_classes=2):
-    '''
-    调用 模型  Segformer_primary  
-    '''
-    model = Segformer_primary(
-    dims = (32, 64, 160, 256),      # dimensions of each stage
-    heads = (1, 2, 5, 8),           # heads of each stage
-    ff_expansion = (8, 8, 4, 4),    # feedforward expansion factor of each stage
-    reduction_ratio = (8, 4, 2, 1), # reduction ratio of each stage for efficient attention
-    num_layers = 2,                 # num layers of each stage
-    decoder_dim = 256,              # decoder dimension
-    num_classes = num_classes                 # number of segmentation classes
-    )
-    return model
-    
+   
 def init_weights(m):
     classname = m.__class__.__name__
     if isinstance(m, nn.Linear):
@@ -593,9 +577,25 @@ def init_weights(m):
         if m.bias is not None:
             m.bias.data.zero_()
 
+def m_segformer_T(num_classes=2):
+    '''
+    调用 模型  Segformer_primary  
+    '''
+    model = Segformer_primary(
+    dims = (32, 64, 160, 256),      # dimensions of each stage
+    heads = (1, 2, 5, 8),           # heads of each stage
+    ff_expansion = (8, 8, 4, 4),    # feedforward expansion factor of each stage
+    reduction_ratio = (8, 4, 2, 1), # reduction ratio of each stage for efficient attention
+    num_layers = 2,                 # num layers of each stage
+    decoder_dim = 256,              # decoder dimension
+    num_classes = num_classes                 # number of segmentation classes
+    )
+    model.apply(init_weights)
+    return model
+
 if __name__ =="__main__":
     model = m_segformer_T()
-    model.apply(init_weights)
+    
     x = torch.randn(2, 3, 512, 512)
     pred = model(x)
     print(pred.shape)
