@@ -648,7 +648,7 @@ class SwinUnet_o(nn.Module):
         else:
             print("none pretrain")
 
-def swinunet(num_classes=2):
+def swinunet_m(num_classes=2):
     model = SwinUnet_o(
         num_classes=num_classes
     )
@@ -656,7 +656,7 @@ def swinunet(num_classes=2):
 
 
 if __name__ == "__main__":
-    net = swinunet(
+    net = swinunet_m(
         num_classes=2
     )
     x = torch.rand(1,3,512,512)
