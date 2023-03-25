@@ -582,9 +582,9 @@ class SwinTransformerSys(nn.Module):
         flops += self.num_features * self.num_classes
         return flops
 
-class SwinUnet(nn.Module):
+class SwinUnet_o(nn.Module):
     def __init__(self, img_size=512, num_classes=2, zero_head=False, vis=False):
-        super(SwinUnet, self).__init__()
+        super(SwinUnet_o, self).__init__()
         self.num_classes = num_classes
         self.zero_head = zero_head
 
@@ -648,10 +648,15 @@ class SwinUnet(nn.Module):
         else:
             print("none pretrain")
 
+def swinunet(num_classes=2):
+    model = SwinUnet_o(
+        num_classes=num_classes
+    )
+    return model
 
 
 if __name__ == "__main__":
-    net = SwinUnet(
+    net = swinunet(
         num_classes=2
     )
     x = torch.rand(1,3,512,512)

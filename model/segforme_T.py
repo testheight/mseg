@@ -290,11 +290,11 @@ class Segformer_primary(nn.Module):
         ) for i, dim in enumerate(dims)])
 
         # 原始分类方法      &&-----已训练-----&&
-        self.to_segmentation = nn.Sequential(
-            nn.Conv2d(4 * decoder_dim, decoder_dim, 1),
-            nn.Conv2d(decoder_dim, num_classes, 1),
-            ##(2,2,128,128)
-            nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False))
+        # self.to_segmentation = nn.Sequential(
+        #     nn.Conv2d(4 * decoder_dim, decoder_dim, 1),
+        #     nn.Conv2d(decoder_dim, num_classes, 1),
+        #     ##(2,2,128,128)
+        #     nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False))
         
         # 改进最后的解码头   
         self.to_segmentation = nn.Sequential(
@@ -408,17 +408,18 @@ class Segformer_unet(nn.Module):
             reduction_ratio = reduction_ratio,
             num_layers = num_layers)
         
-        # 改进类似unet解码结构 method1            &&-----已训练-----&&
-        # self.dc1 = DoubleConv(dims[-1],dims[-1])
-        # self.up1 = up_conv(dims[-1],dims[-2])
-        # self.dc2 = DoubleConv(dims[-2]*2,dims[-2])
-        # self.up2 = up_conv(dims[-2],dims[-3])
-        # self.dc3 = DoubleConv(dims[-3]*2,dims[-3])
-        # self.up3 = up_conv(dims[-3],dims[0])
-        # self.dc4 = DoubleConv(dims[0]*2,dims[0])
-        # self.to_segmentation = nn.Sequential(
-        #     nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False),
-        #     nn.Conv2d(dims[0], num_classes, 1),)
+        #改进类似unet解码结构 method1            &&-----已训练-----&&
+        self.dc1 = DoubleConv(dims[-1],dims[-1])
+        self.up1 = up_conv(dims[-1],dims[-2])
+        self.dc2 = DoubleConv(dims[-2]*2,dims[-2])
+        self.up2 = up_conv(dims[-2],dims[-3])
+        self.dc3 = DoubleConv(dims[-3]*2,dims[-3])
+        self.up3 = up_conv(dims[-3],dims[0])
+        self.dc4 = DoubleConv(dims[0]*2,dims[0])
+        self.to_segmentation = nn.Sequential(
+            nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False),
+            SingleConv(dims[0], dims[0], 1),
+            nn.Conv2d(dims[0], num_classes, 1),)
 
         # ## 改进类似unet解码结构（增加低维卷积特征提取）  method2     &&-----已训练-----&&
         # self.low_conv = SingleConv(3, dims[0], kernel_size=7, stride=2, padding=3)
@@ -433,26 +434,27 @@ class Segformer_unet(nn.Module):
         #     # nn.Conv2d(dims[0]*2,dims[0]*2,kernel_size=1),
         #     # nn.BatchNorm2d(dims[0]*2),
         #     # nn.ReLU(inplace=True),
-        #     SingleConv(dims[0]*2,dims[0]*2,kernel_size=1),
         #     nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+        #     SingleConv(dims[0]*2,dims[0]*2,kernel_size=1),
         #     nn.Conv2d(dims[0]*2, num_classes, 1))
 
-        # 通道注意力机制加亚像素           
-        self.abam0 = cbam_block(dims[0])
-        self.abam1 = cbam_block(dims[1])
-        self.abam2 = cbam_block(dims[2])
-        self.abam3 = cbam_block(dims[3])
+        # # 通道注意力机制加亚像素           
+        # self.abam0 = cbam_block(dims[0])
+        # self.abam1 = cbam_block(dims[1])
+        # self.abam2 = cbam_block(dims[2])
+        # self.abam3 = cbam_block(dims[3])
 
-        self.dc1 = DoubleConv(dims[3],dims[3])
-        self.up1 = nn.PixelShuffle(2)
-        self.dc2 = DoubleConv(dims[3]//4+dims[2],dims[2])
-        self.up2 = nn.PixelShuffle(2)
-        self.dc3 = DoubleConv(dims[2]//4+dims[1],dims[1])
-        self.up3 = nn.PixelShuffle(2)
-        self.dc4 = DoubleConv(dims[1]//4+dims[0],dims[0])
-        self.to_segmentation = nn.Sequential(
-            nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False),
-            nn.Conv2d(dims[0], num_classes, 1),)
+        # self.dc1 = DoubleConv(dims[3],dims[3])
+        # self.up1 = nn.PixelShuffle(2)
+        # self.dc2 = DoubleConv(dims[3]//4+dims[2],dims[2])
+        # self.up2 = nn.PixelShuffle(2)
+        # self.dc3 = DoubleConv(dims[2]//4+dims[1],dims[1])
+        # self.up3 = nn.PixelShuffle(2)
+        # self.dc4 = DoubleConv(dims[1]//4+dims[0],dims[0])
+        # self.to_segmentation = nn.Sequential(
+        #     nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False),
+        #     SingleConv(4 * decoder_dim, decoder_dim, 1),
+        #     nn.Conv2d(dims[0], num_classes, 1),)
 
 
     def forward(self, x):           
@@ -461,16 +463,16 @@ class Segformer_unet(nn.Module):
         layer_outputs = self.mit(x, return_layer_outputs = True)
         #(2,32,128,128),(2,64,64,64),(2,160,32,32),(2,256,16,16)
 
-        # # methond1
-        # x_c = self.dc1(layer_outputs[3])
-        # x_c = self.up1(x_c)
-        # x_c = self.dc2(torch.cat([x_c,layer_outputs[2]], dim=1))
-        # x_c = self.up2(x_c)
-        # x_c = self.dc3(torch.cat([x_c,layer_outputs[1]], dim=1))
-        # x_c = self.up3(x_c)
-        # x_c = self.dc4(torch.cat([x_c,layer_outputs[0]], dim=1))
-        # # (2,32,128,128)
-        # output = self.to_segmentation(x_c)
+        # methond1
+        x_c = self.dc1(layer_outputs[3])
+        x_c = self.up1(x_c)
+        x_c = self.dc2(torch.cat([x_c,layer_outputs[2]], dim=1))
+        x_c = self.up2(x_c)
+        x_c = self.dc3(torch.cat([x_c,layer_outputs[1]], dim=1))
+        x_c = self.up3(x_c)
+        x_c = self.dc4(torch.cat([x_c,layer_outputs[0]], dim=1))
+        # (2,32,128,128)
+        output = self.to_segmentation(x_c)
 
         # ## methond2 增加低维卷积特征提取
         # x_l= self.low_conv(x)
@@ -485,20 +487,20 @@ class Segformer_unet(nn.Module):
         # # (2,32,128,128)
         # output = self.to_segmentation(torch.cat([F.interpolate(x_c,scale_factor=2),x_l],dim=1))
 
-        ## methond3 增加低维卷积特征提取
-        x_c = self.dc1(self.abam3(layer_outputs[3]))
-        # (2,256,16,16)
-        x_c = self.up1(x_c)
-        # (2,64,32,32)
-        x_c = torch.cat([x_c,self.abam2(layer_outputs[2])], dim=1)
+        # ## methond3 师兄之改
+        # x_c = self.dc1(self.abam3(layer_outputs[3]))
+        # # (2,256,16,16)
+        # x_c = self.up1(x_c)
+        # # (2,64,32,32)
+        # x_c = torch.cat([x_c,self.abam2(layer_outputs[2])], dim=1)
 
-        x_c = self.dc2(x_c)
-        x_c = self.up2(x_c)
-        x_c = self.dc3(torch.cat([x_c,self.abam1(layer_outputs[1])], dim=1))
-        x_c = self.up3(x_c)
-        x_c = self.dc4(torch.cat([x_c,self.abam0(layer_outputs[0])], dim=1))
-        # (2,32,128,128)
-        output = self.to_segmentation(x_c)
+        # x_c = self.dc2(x_c)
+        # x_c = self.up2(x_c)
+        # x_c = self.dc3(torch.cat([x_c,self.abam1(layer_outputs[1])], dim=1))
+        # x_c = self.up3(x_c)
+        # x_c = self.dc4(torch.cat([x_c,self.abam0(layer_outputs[0])], dim=1))
+        # # (2,32,128,128)
+        # output = self.to_segmentation(x_c)
 
         return output
 
@@ -579,7 +581,7 @@ def init_weights(m):
 
 def m_segformer_T(num_classes=2):
     '''
-    调用 模型  Segformer_primary  
+    调用 模型  Segformer_primary   Segformer_unet
     '''
     model = Segformer_primary(
     dims = (32, 64, 160, 256),      # dimensions of each stage
@@ -597,9 +599,8 @@ if __name__ =="__main__":
     model = m_segformer_T()
     
     x = torch.randn(2, 3, 512, 512)
-    pred = model(x)
-    print(pred.shape)
+    # pred = model(x)
+    # print(pred.shape)
     # print(model)
     # y = mit(x)
     # print(y.shape)
-    

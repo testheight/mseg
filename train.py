@@ -15,7 +15,7 @@ def get_arguments():
     parser.add_argument("--batch_size", type=int, default=4,
                         help="Number of images sent to the network in one step.")
     parser.add_argument("--data_dir", type=str, help="datasets path",
-                        default="D:\\software\\Code\\codefile\\image_result\\mydata\\model_test_data")#D:\\software\\Code\codefile\\image_result\\mydata\\model_test_data
+                        default="D:\\software\\Code\\codefile\\result\\mydata\\model_test_data")#D:\\software\\Code\codefile\\image_result\\mydata\\model_test_data
     parser.add_argument("--save_dir", type=str,help="save path .",
                         default="D:\\software\\Code\\codefile\\mseg\\results")#D:\\software\\Code\\codefile\\mseg\\results
     parser.add_argument("--input_size", type=list, default=[512,512],
@@ -25,7 +25,7 @@ def get_arguments():
     
     ###### ------------ 设置模型 --------------- ######
     parser.add_argument("--arch", type=str, default="m_segformer", 
-                        help="[UNet, TransUNet, SwinUnet, DualSeg_res101, deeplabv3p, m_segformer]")
+                        help="[UNet, pspnet_smp, TransUNet, SwinUnet, DualSeg_res101, deeplabv3p, m_segformer]")
     parser.add_argument("--num_classes", type=int, default=2,
                         help="Number of classes to predict (including background).")
     parser.add_argument("--name_classes", type=list, default=["background", "root"],
@@ -86,6 +86,7 @@ def main(config):
     criterion = eval(config.criterion)
 
     # 打印各种参数
+    logger.info('Segformer_primary + 改善最后的解码头 +cos +crossloss +adaw')
     logger.info('epochs: {}, batch_size: {}, lr: {}'.format(config.epochs,config.batch_size,config.lr))
     logger.info(net)
     logger.info('optimizer:{}'.format(config.optimizer))
@@ -117,8 +118,8 @@ def main(config):
             logger.info('---Trian--- epoch: {} [{}/{} ({:.0f}%)], loss: {:.6f} '
                         .format(epoch+1,batch_idx*config.batch_size,len(train_dataset),100.0*(batch_idx*config.batch_size)/len(train_dataset),loss.item()))
             # 保存loss值最小的网络参数
-            if loss < best_loss:
-                best_loss = loss
+            if loss.item() < best_loss:
+                best_loss = loss.item()
                 torch.save(net.state_dict(), os.path.join(save_pth,'last_model.pth'))
             # 更新参数
             scaler.scale(loss).backward()
