@@ -1,4 +1,5 @@
-import torch
+import torch,os,tqdm
+from PIL import Image
 
 #优化器
 def SGD(net,lr=0.01):
@@ -52,3 +53,38 @@ def create_lr_scheduler(optimizer,
             return (1 - (x - warmup_epochs * num_step) / ((epochs - warmup_epochs) * num_step)) ** 0.9
 
     return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=f)
+
+def Stitching_images(image_file,Stitching_file,pixel):
+    '''     img_file:拼接图片的路径
+            Stitching_file:保存的路径  '''
+    if not os.path.exists(Stitching_file):
+        os.makedirs(Stitching_file)
+
+    pixel_wide = pixel_high =pixel
+    name_list = []
+    for name in os.listdir(image_file):
+        if name.split('_')[0] not in name_list:
+            name_list.append(name.split('_')[0])
+
+    for name in tqdm.tqdm(name_list):
+        row_list = []
+        column_list = []
+        for file in os.listdir(image_file):
+            if name in file:
+                if file.split("_")[1] not in row_list:
+                    row_list.append((file.split("_")[1]))
+                if file.split("_")[2].split('.')[0] not in column_list:
+                    column_list.append((file.split("_")[2].split('.')[0]))
+
+        row = len(row_list)
+        column = len(column_list)
+        #创建空白画布
+        target = Image.new('RGB', (pixel_wide * column, pixel_high * row))  
+        #size: A 2-tuple, containing (width, height) in pixels.
+        for i in range(row):
+            for j in range(column):
+                image = Image.open(
+                    os.path.join(image_file,name+"_"+str(i+1)
+                                     +"_"+str(j+1)+".png"))
+                target.paste(image, (j * pixel_wide, i * pixel_high))
+        target.save(Stitching_file+"\\"+str(name)+".png")

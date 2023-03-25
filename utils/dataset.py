@@ -61,7 +61,7 @@ class test_Dataset(Dataset):
     def __getitem__(self, index):
         #读取图像
         img_path,label_path =  self.images[index],self.labels[index]
-        imgs_id = img_path.split("/")[-1].split(".")[0]
+        imgs_id = img_path.split("\\")[-1].split(".")[0]
         imgs = cv2.imread(img_path)
         imgs = cv2.cvtColor(imgs, cv2.COLOR_BGR2RGB)
         lbls = cv2.imread(label_path,cv2.IMREAD_GRAYSCALE)

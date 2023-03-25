@@ -4,7 +4,7 @@ import numpy as np
 from tqdm import tqdm
 from torch.cuda.amp import autocast, GradScaler
 
-from model import UNet,TransUNet,SwinUnet,deeplabv3p,m_segformer
+from model import transunet_m,swinunet_m,deeplabv3p_smp,unet_smp,segformer_m,pspnet_smp,segnet_m
 from utils import train_Dataset,log_output,fast_hist,per_class_iu,per_class_PA_Recall,per_class_Precision
 from utils import adamw,ExponentialLR,CosLR,CrossEntropy_Loss,focal_loss
 
@@ -24,8 +24,8 @@ def get_arguments():
                         help="Proportion of training datasets.") 
     
     ###### ------------ 设置模型 --------------- ######
-    parser.add_argument("--arch", type=str, default="m_segformer", 
-                        help="[UNet, pspnet_smp, TransUNet, SwinUnet, DualSeg_res101, deeplabv3p, m_segformer]")
+    parser.add_argument("--arch", type=str, default="unet_smp", 
+                        help="[transunet_m,swinunet_m,deeplabv3p_smp,unet_smp,pspnet_smp,segnet_m,segformer_m]")
     parser.add_argument("--num_classes", type=int, default=2,
                         help="Number of classes to predict (including background).")
     parser.add_argument("--name_classes", type=list, default=["background", "root"],

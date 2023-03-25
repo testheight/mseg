@@ -579,7 +579,7 @@ def init_weights(m):
         if m.bias is not None:
             m.bias.data.zero_()
 
-def m_segformer_T(num_classes=2):
+def segformer_m(num_classes=2):
     '''
     调用 模型  Segformer_primary   Segformer_unet
     '''
@@ -596,7 +596,7 @@ def m_segformer_T(num_classes=2):
     return model
 
 if __name__ =="__main__":
-    model = m_segformer_T()
+    model = segformer_m()
     
     x = torch.randn(2, 3, 512, 512)
     # pred = model(x)
