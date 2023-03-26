@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import warnings
 import numpy as np
 from functools import partial
+from timm.models.efficientnet_blocks import DepthwiseSeparableConv
 
 def _no_grad_trunc_normal_(tensor, mean, std, a, b):
 
@@ -372,7 +373,7 @@ class mit_b0(MixVisionTransformer):
             drop_rate=0.0, drop_path_rate=0.1)
         if pretrained:
             print("Load backbone weights")
-            self.load_state_dict(torch.load("model_data/segformer_b0_backbone_weights.pth"), strict=False)
+            self.load_state_dict(torch.load("pretrain\segformer_b0_backbone_weights.pth"), strict=False)
 
 class mit_b1(MixVisionTransformer):
     def __init__(self, pretrained = False):
@@ -382,7 +383,7 @@ class mit_b1(MixVisionTransformer):
             drop_rate=0.0, drop_path_rate=0.1)
         if pretrained:
             print("Load backbone weights")
-            self.load_state_dict(torch.load("model_data/segformer_b1_backbone_weights.pth"), strict=False)
+            self.load_state_dict(torch.load("pretrain\segformer_b1_backbone_weights.pth"), strict=False)
 
 class mit_b2(MixVisionTransformer):
     def __init__(self, pretrained = False):
@@ -392,7 +393,7 @@ class mit_b2(MixVisionTransformer):
             drop_rate=0.0, drop_path_rate=0.1)
         if pretrained:
             print("Load backbone weights")
-            self.load_state_dict(torch.load("model_data/segformer_b2_backbone_weights.pth"), strict=False)
+            self.load_state_dict(torch.load("pretrain\segformer_b2_backbone_weights.pth"), strict=False)
 
 class mit_b3(MixVisionTransformer):
     def __init__(self, pretrained = False):
@@ -402,7 +403,7 @@ class mit_b3(MixVisionTransformer):
             drop_rate=0.0, drop_path_rate=0.1)
         if pretrained:
             print("Load backbone weights")
-            self.load_state_dict(torch.load("model_data/segformer_b3_backbone_weights.pth"), strict=False)
+            self.load_state_dict(torch.load("pretrain\segformer_b3_backbone_weights.pth"), strict=False)
 
 class mit_b4(MixVisionTransformer):
     def __init__(self, pretrained = False):
@@ -412,7 +413,7 @@ class mit_b4(MixVisionTransformer):
             drop_rate=0.0, drop_path_rate=0.1)
         if pretrained:
             print("Load backbone weights")
-            self.load_state_dict(torch.load("model_data/segformer_b4_backbone_weights.pth"), strict=False)
+            self.load_state_dict(torch.load("pretrain\segformer_b4_backbone_weights.pth"), strict=False)
 
 class mit_b5(MixVisionTransformer):
     def __init__(self, pretrained = False):
@@ -422,7 +423,7 @@ class mit_b5(MixVisionTransformer):
             drop_rate=0.0, drop_path_rate=0.1)
         if pretrained:
             print("Load backbone weights")
-            self.load_state_dict(torch.load("model_data/segformer_b5_backbone_weights.pth"), strict=False)
+            self.load_state_dict(torch.load("pretrain\segformer_b5_backbone_weights.pth"), strict=False)
 
 class MLP(nn.Module):
 
@@ -492,10 +493,80 @@ class SegFormerHead(nn.Module):
         x = self.dropout(_c)
         x = self.linear_pred(x)
         return x
-    
+
+# 双卷积
+class DoubleConv(nn.Module):
+    """(convolution => [BN] => ReLU) * 2"""
+
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.double_conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
+        )
+    def forward(self, x):
+        return self.double_conv(x)
+#上采样
+class up_conv(nn.Module):
+    """
+    Up Convolution Block
+    """
+    def __init__(self, in_ch, out_ch):
+        super(up_conv, self).__init__()
+        self.up = nn.Sequential(
+            nn.Upsample(scale_factor=2),
+            nn.Conv2d(in_ch, out_ch, kernel_size=3, stride=1, padding=1, bias=True),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=True))
+
+    def forward(self, x):
+        x = self.up(x)
+        return x
+
+# 类unet_head 
 class unet_head(nn.Module):
-    def __init__(self, num_classes = 21,):
+    def __init__(self, num_classes = 2,in_channels=[32, 64, 160, 256]):
         super(unet_head, self).__init__()
+                #改进类似unet解码结构 method1            &&-----已训练-----&&
+        self.dc1 = DoubleConv(in_channels[-1],in_channels[-1])
+        self.up1 = up_conv(in_channels[-1],in_channels[-2])
+        self.dc2 = DoubleConv(in_channels[-2]*2,in_channels[-2])
+        self.up2 = up_conv(in_channels[-2],in_channels[-3])
+        self.dc3 = DoubleConv(in_channels[-3]*2,in_channels[-3])
+        self.up3 = up_conv(in_channels[-3],in_channels[0])
+        self.dc4 = DoubleConv(in_channels[0]*2,in_channels[0])
+        self.to_segmentation = nn.Sequential(
+            nn.Conv2d(in_channels[0], num_classes, 1),)
+        
+    def forward(self, x):           
+        # methond1
+        x_c = self.dc1(x[3])
+        x_c = self.up1(x_c)
+        x_c = self.dc2(torch.cat([x_c,x[2]], dim=1))
+        x_c = self.up2(x_c)
+        x_c = self.dc3(torch.cat([x_c,x[1]], dim=1))
+        x_c = self.up3(x_c)
+        x_c = self.dc4(torch.cat([x_c,x[0]], dim=1))
+        # (2,32,128,128)
+        output = self.to_segmentation(x_c)
+        return output
+
+# 深度可分离卷积
+class depthwise_separable_conv(nn.Module):
+    def __init__(self, ch_in, ch_out):
+        super(depthwise_separable_conv, self).__init__()
+        self.ch_in = ch_in
+        self.ch_out = ch_out
+        self.depth_conv = nn.Conv2d(ch_in, ch_in, kernel_size=3, padding=1, groups=ch_in)
+        self.point_conv = nn.Conv2d(ch_in, ch_out, kernel_size=1)
+    def forward(self, x):
+        x = self.depth_conv(x)
+        x = self.point_conv(x)
+        return x
 
 class SegFormer(nn.Module):
     def __init__(self, num_classes = 21, phi = 'b0', pretrained = False):
@@ -513,6 +584,7 @@ class SegFormer(nn.Module):
             'b3': 768, 'b4': 768, 'b5': 768,
         }[phi]
         self.decode_head = SegFormerHead(num_classes, self.in_channels, self.embedding_dim)
+        # self.decode_head = unet_head(num_classes, self.in_channels)
 
     def forward(self, inputs):
         H, W = inputs.size(2), inputs.size(3)
@@ -527,8 +599,9 @@ class SegFormer(nn.Module):
 def segformer_m(num_classes=2):
 
     model = SegFormer(
-    phi='b1',
-    num_classes = num_classes                 # number of segmentation classes
+    phi='b0',
+    num_classes = num_classes,                 # number of segmentation classes
+    pretrained = True
     )
 
     return model
