@@ -554,19 +554,34 @@ class unet_head(nn.Module):
         # (2,32,128,128)
         output = self.to_segmentation(x_c)
         return output
-
-# 深度可分离卷积
-class depthwise_separable_conv(nn.Module):
-    def __init__(self, ch_in, ch_out):
-        super(depthwise_separable_conv, self).__init__()
-        self.ch_in = ch_in
-        self.ch_out = ch_out
-        self.depth_conv = nn.Conv2d(ch_in, ch_in, kernel_size=3, padding=1, groups=ch_in)
-        self.point_conv = nn.Conv2d(ch_in, ch_out, kernel_size=1)
-    def forward(self, x):
-        x = self.depth_conv(x)
-        x = self.point_conv(x)
-        return x
+    
+   # 类unet_head + 深层可分离卷积
+class DSWunet_head(nn.Module):
+    def __init__(self, num_classes = 2,in_channels=[32, 64, 160, 256]):
+        super(DSWunet_head, self).__init__()
+                #改进类似unet解码结构 method1            &&-----已训练-----&&
+        self.dc1 = DepthwiseSeparableConv(in_channels[-1],in_channels[-1])
+        self.up1 = up_conv(in_channels[-1],in_channels[-2])
+        self.dc2 = DepthwiseSeparableConv(in_channels[-2]*2,in_channels[-2])
+        self.up2 = up_conv(in_channels[-2],in_channels[-3])
+        self.dc3 = DepthwiseSeparableConv(in_channels[-3]*2,in_channels[-3])
+        self.up3 = up_conv(in_channels[-3],in_channels[0])
+        self.dc4 = DepthwiseSeparableConv(in_channels[0]*2,in_channels[0])
+        self.to_segmentation = nn.Sequential(
+            nn.Conv2d(in_channels[0], num_classes, 1),)
+        
+    def forward(self, x):           
+        # methond1
+        x_c = self.dc1(x[3])
+        x_c = self.up1(x_c)
+        x_c = self.dc2(torch.cat([x_c,x[2]], dim=1))
+        x_c = self.up2(x_c)
+        x_c = self.dc3(torch.cat([x_c,x[1]], dim=1))
+        x_c = self.up3(x_c)
+        x_c = self.dc4(torch.cat([x_c,x[0]], dim=1))
+        # (2,32,128,128)
+        output = self.to_segmentation(x_c)
+        return output 
 
 class SegFormer(nn.Module):
     def __init__(self, num_classes = 21, phi = 'b0', pretrained = False):
@@ -583,8 +598,9 @@ class SegFormer(nn.Module):
             'b0': 256, 'b1': 256, 'b2': 768,
             'b3': 768, 'b4': 768, 'b5': 768,
         }[phi]
-        self.decode_head = SegFormerHead(num_classes, self.in_channels, self.embedding_dim)
+        # self.decode_head = SegFormerHead(num_classes, self.in_channels, self.embedding_dim)
         # self.decode_head = unet_head(num_classes, self.in_channels)
+        self.decode_head = DSWunet_head(num_classes, self.in_channels)
 
     def forward(self, inputs):
         H, W = inputs.size(2), inputs.size(3)
@@ -601,7 +617,7 @@ def segformer_m(num_classes=2):
     model = SegFormer(
     phi='b0',
     num_classes = num_classes,                 # number of segmentation classes
-    pretrained = True
+    pretrained = False
     )
 
     return model
