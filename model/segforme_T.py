@@ -570,7 +570,7 @@ class DSWunet_head(nn.Module):
         self.to_segmentation = nn.Sequential(
             nn.Conv2d(in_channels[0], num_classes, 1),)
         
-    def forward(self, x):           
+    def forward(self, x):
         # methond1
         x_c = self.dc1(x[3])
         x_c = self.up1(x_c)
@@ -584,7 +584,7 @@ class DSWunet_head(nn.Module):
         return output 
 
 class SegFormer(nn.Module):
-    def __init__(self, num_classes = 21, phi = 'b0', pretrained = False):
+    def __init__(self, num_classes = 21, phi = 'b0', decode_name="unet_head", pretrained = False):
         super(SegFormer, self).__init__()
         self.in_channels = {
             'b0': [32, 64, 160, 256], 'b1': [64, 128, 320, 512], 'b2': [64, 128, 320, 512],
@@ -598,9 +598,12 @@ class SegFormer(nn.Module):
             'b0': 256, 'b1': 256, 'b2': 768,
             'b3': 768, 'b4': 768, 'b5': 768,
         }[phi]
-        # self.decode_head = SegFormerHead(num_classes, self.in_channels, self.embedding_dim)
-        # self.decode_head = unet_head(num_classes, self.in_channels)
-        self.decode_head = DSWunet_head(num_classes, self.in_channels)
+
+        self.decode_head   = {
+            'SegFormerHead': SegFormerHead,
+            'unet_head': unet_head,
+            'DSWunet_head': DSWunet_head,
+        }[decode_name](num_classes, self.in_channels)
 
     def forward(self, inputs):
         H, W = inputs.size(2), inputs.size(3)
@@ -615,8 +618,9 @@ class SegFormer(nn.Module):
 def segformer_m(num_classes=2):
 
     model = SegFormer(
-    phi='b0',
-    num_classes = num_classes,                 # number of segmentation classes
+    phi='b1',
+    decode_name = "unet_head",                  # "unet_head" "SegFormerHead" "DSWunet_head"
+    num_classes = num_classes,                  # number of segmentation classes
     pretrained = False
     )
 

@@ -129,7 +129,7 @@ def main(config):
         scheduler.step()
 
         #模型验证
-        if len(trainval_dataset) !=0 and (epoch+1) % 2==0:
+        if len(trainval_dataset) !=0 and (epoch+1) % 10==0:
             net.eval()
             with torch.no_grad():
                 hist = np.zeros((config.num_classes, config.num_classes))
