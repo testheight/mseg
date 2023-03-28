@@ -621,6 +621,40 @@ class Low_level_unet_head(nn.Module):
        
         return output
 
+   # 类unet_head + 深层可分离卷积
+class Low_level_DSWunet_head(nn.Module):
+    def __init__(self, num_classes = 2,in_channels=[32, 64, 160, 256]):
+        super(Low_level_DSWunet_head, self).__init__()
+
+        self.low_c = DepthwiseSeparableConv(3,in_channels[0])
+
+        self.dc1 = DepthwiseSeparableConv(in_channels[3],in_channels[3])
+        self.up1 = up_conv(in_channels[3],in_channels[2])
+        self.dc2 = DepthwiseSeparableConv(in_channels[2]*2,in_channels[2])
+        self.up2 = up_conv(in_channels[2],in_channels[1])
+        self.dc3 = DepthwiseSeparableConv(in_channels[1]*2,in_channels[1])
+        self.up3 = up_conv(in_channels[1],in_channels[0])
+        self.dc4 = DepthwiseSeparableConv(in_channels[0]*2,in_channels[0])
+        self.to_segmentation = nn.Sequential(
+            DepthwiseSeparableConv(in_channels[0]*2,in_channels[0]),
+            nn.Conv2d(in_channels[0], num_classes, 1),)
+        
+    def forward(self, x1,x2):
+        x_1 = self.low_c(x1)
+        output = self.dc1(x2[3])
+        output = self.up1(output)
+        output = self.dc2(torch.cat([output,x2[2]], dim=1))
+        output = self.up2(output)
+        output = self.dc3(torch.cat([output,x2[1]], dim=1))
+        output = self.up3(output)
+        output = self.dc4(torch.cat([output,x2[0]], dim=1))
+        # (2,32,128,128)
+        
+        output = F.interpolate(output, size=(512, 512), mode='bilinear', align_corners=True)
+        output = self.to_segmentation(torch.cat([x_1,output],dim=1))
+        return output 
+
+
 class SegFormer(nn.Module):
     def __init__(self, num_classes = 21, phi = 'b0', decode_name="unet_head", pretrained = False):
         super(SegFormer, self).__init__()
@@ -691,6 +725,48 @@ class SegFormer_Low_level(nn.Module):
         output = self.decode_head.forward(inputs,output)
         
         return output
+
+class SegFormer(nn.Module):
+    def __init__(self, num_classes = 21, phi = 'b0', decode_name="unet_head", pretrained = False):
+        super(SegFormer, self).__init__()
+        self.name = decode_name
+        self.in_channels = {
+            'b0': [32, 64, 160, 256], 'b1': [64, 128, 320, 512], 'b2': [64, 128, 320, 512],
+            'b3': [64, 128, 320, 512], 'b4': [64, 128, 320, 512], 'b5': [64, 128, 320, 512],
+        }[phi]
+        self.backbone   = {
+            'b0': mit_b0, 'b1': mit_b1, 'b2': mit_b2,
+            'b3': mit_b3, 'b4': mit_b4, 'b5': mit_b5,
+        }[phi](pretrained)
+        self.embedding_dim   = {
+            'b0': 256, 'b1': 256, 'b2': 768,
+            'b3': 768, 'b4': 768, 'b5': 768,
+        }[phi]
+
+        if self.name[:3]!="Low":
+            self.decode_head   = {
+                'SegFormerHead': SegFormerHead,
+                'unet_head': unet_head,
+                'DSWunet_head': DSWunet_head,
+            }[decode_name](num_classes, self.in_channels)
+        else:
+            self.decode_head   = {
+            'Low_level_unet_head': Low_level_unet_head,
+            'Low_level_DSWunet_head': Low_level_DSWunet_head,
+        }[decode_name](num_classes, self.in_channels)
+
+
+    def forward(self, inputs):
+        H, W = inputs.size(2), inputs.size(3)
+        # 0(128,64,32,16) 1(128,64,32,16) 
+        output = self.backbone.forward(inputs)
+        if self.name[:3]!="Low":
+            output = self.decode_head.forward(output)
+        else:
+            output = self.decode_head.forward(inputs,output)
+        
+        return output
+
 
 def segformer_m(num_classes=2):
 

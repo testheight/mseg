@@ -529,7 +529,7 @@ class up_conv(nn.Module):
         x = self.up(x)
         return x
 
-# 类unet_head 
+    # 类unet_head 
 class unet_head(nn.Module):
     def __init__(self, num_classes = 2,in_channels=[32, 64, 160, 256]):
         super(unet_head, self).__init__()
@@ -621,6 +621,39 @@ class Low_level_unet_head(nn.Module):
        
         return output
 
+   # 类unet_head + 深层可分离卷积
+class Low_level_DSWunet_head(nn.Module):
+    def __init__(self, num_classes = 2,in_channels=[32, 64, 160, 256]):
+        super(Low_level_DSWunet_head, self).__init__()
+
+        self.low_c = DepthwiseSeparableConv(3,in_channels[0])
+
+        self.dc1 = DepthwiseSeparableConv(in_channels[3],in_channels[3])
+        self.up1 = up_conv(in_channels[3],in_channels[2])
+        self.dc2 = DepthwiseSeparableConv(in_channels[2]*2,in_channels[2])
+        self.up2 = up_conv(in_channels[2],in_channels[1])
+        self.dc3 = DepthwiseSeparableConv(in_channels[1]*2,in_channels[1])
+        self.up3 = up_conv(in_channels[1],in_channels[0])
+        self.dc4 = DepthwiseSeparableConv(in_channels[0]*2,in_channels[0])
+        self.to_segmentation = nn.Sequential(
+            DepthwiseSeparableConv(in_channels[0]*2,in_channels[0]),
+            nn.Conv2d(in_channels[0], num_classes, 1),)
+        
+    def forward(self, x1,x2):
+        x_1 = self.low_c(x1)
+        output = self.dc1(x2[3])
+        output = self.up1(output)
+        output = self.dc2(torch.cat([output,x2[2]], dim=1))
+        output = self.up2(output)
+        output = self.dc3(torch.cat([output,x2[1]], dim=1))
+        output = self.up3(output)
+        output = self.dc4(torch.cat([output,x2[0]], dim=1))
+        # (2,32,128,128)
+        
+        output = F.interpolate(output, size=(512, 512), mode='bilinear', align_corners=True)
+        output = self.to_segmentation(torch.cat([x_1,output],dim=1))
+        return output 
+
 class SegFormer(nn.Module):
     def __init__(self, num_classes = 21, phi = 'b0', decode_name="unet_head", pretrained = False):
         super(SegFormer, self).__init__()
@@ -647,7 +680,7 @@ class SegFormer(nn.Module):
         else:
             self.decode_head   = {
             'Low_level_unet_head': Low_level_unet_head,
-            # 'Low_level_DSWunet_head': Low_level_DSWunet_head,
+            'Low_level_DSWunet_head': Low_level_DSWunet_head,
         }[decode_name](num_classes, self.in_channels)
 
 
@@ -666,7 +699,7 @@ def segformer_m(num_classes=2):
 
     model = SegFormer(                             #    SegFormer         
     phi='b0',
-    decode_name = "Low_level_unet_head",           # "SegFormerHead" "unet_head" "DSWunet_head"   "Low_level_unet_head"  "Low_level_DSWunet_head"
+    decode_name = "Low_level_DSWunet_head",           # "SegFormerHead" "unet_head" "DSWunet_head"   "Low_level_unet_head"  "Low_level_DSWunet_head"
     num_classes = num_classes,                     # number of segmentation classes
     pretrained = False
     )
@@ -676,10 +709,10 @@ def segformer_m(num_classes=2):
 if __name__ =="__main__":
     model = segformer_m()
     
-    # x = torch.randn(2, 3, 512, 512)
-    # pred = model(x)
-    # print(pred.shape)
+    x = torch.randn(2, 3, 512, 512)
+    pred = model(x)
+    print(pred.shape)
 
-    print(model)
+    # print(model)
     # y = mit(x)
     # print(y.shape)
