@@ -492,6 +492,8 @@ class SegFormerHead(nn.Module):
 
         x = self.dropout(_c)
         x = self.linear_pred(x)
+
+        x = F.interpolate(x, size=(512, 512), mode='bilinear', align_corners=True)
         return x
 
 # 双卷积
@@ -532,27 +534,28 @@ class unet_head(nn.Module):
     def __init__(self, num_classes = 2,in_channels=[32, 64, 160, 256]):
         super(unet_head, self).__init__()
                 #改进类似unet解码结构 method1            &&-----已训练-----&&
-        self.dc1 = DoubleConv(in_channels[-1],in_channels[-1])
-        self.up1 = up_conv(in_channels[-1],in_channels[-2])
-        self.dc2 = DoubleConv(in_channels[-2]*2,in_channels[-2])
-        self.up2 = up_conv(in_channels[-2],in_channels[-3])
-        self.dc3 = DoubleConv(in_channels[-3]*2,in_channels[-3])
-        self.up3 = up_conv(in_channels[-3],in_channels[0])
+        self.dc1 = DoubleConv(in_channels[3],in_channels[3])
+        self.up1 = up_conv(in_channels[3],in_channels[2])
+        self.dc2 = DoubleConv(in_channels[2]*2,in_channels[2])
+        self.up2 = up_conv(in_channels[2],in_channels[1])
+        self.dc3 = DoubleConv(in_channels[1]*2,in_channels[1])
+        self.up3 = up_conv(in_channels[1],in_channels[0])
         self.dc4 = DoubleConv(in_channels[0]*2,in_channels[0])
         self.to_segmentation = nn.Sequential(
             nn.Conv2d(in_channels[0], num_classes, 1),)
         
     def forward(self, x):           
         # methond1
-        x_c = self.dc1(x[3])
-        x_c = self.up1(x_c)
-        x_c = self.dc2(torch.cat([x_c,x[2]], dim=1))
-        x_c = self.up2(x_c)
-        x_c = self.dc3(torch.cat([x_c,x[1]], dim=1))
-        x_c = self.up3(x_c)
-        x_c = self.dc4(torch.cat([x_c,x[0]], dim=1))
+        output = self.dc1(x[3])
+        output = self.up1(output)
+        output = self.dc2(torch.cat([output,x[2]], dim=1))
+        output = self.up2(output)
+        output = self.dc3(torch.cat([output,x[1]], dim=1))
+        output = self.up3(output)
+        output = self.dc4(torch.cat([output,x[0]], dim=1))
         # (2,32,128,128)
-        output = self.to_segmentation(x_c)
+        output = self.to_segmentation(output)
+        output = F.interpolate(output, size=(512, 512), mode='bilinear', align_corners=True)
         return output
     
    # 类unet_head + 深层可分离卷积
@@ -560,32 +563,68 @@ class DSWunet_head(nn.Module):
     def __init__(self, num_classes = 2,in_channels=[32, 64, 160, 256]):
         super(DSWunet_head, self).__init__()
                 #改进类似unet解码结构 method1            &&-----已训练-----&&
-        self.dc1 = DepthwiseSeparableConv(in_channels[-1],in_channels[-1])
-        self.up1 = up_conv(in_channels[-1],in_channels[-2])
-        self.dc2 = DepthwiseSeparableConv(in_channels[-2]*2,in_channels[-2])
-        self.up2 = up_conv(in_channels[-2],in_channels[-3])
-        self.dc3 = DepthwiseSeparableConv(in_channels[-3]*2,in_channels[-3])
-        self.up3 = up_conv(in_channels[-3],in_channels[0])
+        self.dc1 = DepthwiseSeparableConv(in_channels[3],in_channels[3])
+        self.up1 = up_conv(in_channels[3],in_channels[2])
+        self.dc2 = DepthwiseSeparableConv(in_channels[2]*2,in_channels[2])
+        self.up2 = up_conv(in_channels[2],in_channels[1])
+        self.dc3 = DepthwiseSeparableConv(in_channels[1]*2,in_channels[1])
+        self.up3 = up_conv(in_channels[1],in_channels[0])
         self.dc4 = DepthwiseSeparableConv(in_channels[0]*2,in_channels[0])
         self.to_segmentation = nn.Sequential(
             nn.Conv2d(in_channels[0], num_classes, 1),)
         
     def forward(self, x):
         # methond1
-        x_c = self.dc1(x[3])
-        x_c = self.up1(x_c)
-        x_c = self.dc2(torch.cat([x_c,x[2]], dim=1))
-        x_c = self.up2(x_c)
-        x_c = self.dc3(torch.cat([x_c,x[1]], dim=1))
-        x_c = self.up3(x_c)
-        x_c = self.dc4(torch.cat([x_c,x[0]], dim=1))
+        output = self.dc1(x[3])
+        output = self.up1(output)
+        output = self.dc2(torch.cat([output,x[2]], dim=1))
+        output = self.up2(output)
+        output = self.dc3(torch.cat([output,x[1]], dim=1))
+        output = self.up3(output)
+        output = self.dc4(torch.cat([output,x[0]], dim=1))
         # (2,32,128,128)
-        output = self.to_segmentation(x_c)
+        output = self.to_segmentation(output)
+        output = F.interpolate(output, size=(512, 512), mode='bilinear', align_corners=True)
         return output 
+
+# 类unet_head + 低维特征
+class Low_level_unet_head(nn.Module):
+    def __init__(self, num_classes = 2,in_channels=[32, 64, 160, 256]):
+        super(Low_level_unet_head, self).__init__()
+        # #低维特征
+        self.low_c = DoubleConv(3,in_channels[0])
+        # #上采样
+        self.dc1 = DoubleConv(in_channels[3],in_channels[3])
+        self.up1 = up_conv(in_channels[3],in_channels[2])
+        self.dc2 = DoubleConv(in_channels[2]*2,in_channels[2])
+        self.up2 = up_conv(in_channels[2],in_channels[1])
+        self.dc3 = DoubleConv(in_channels[1]*2,in_channels[1])
+        self.up3 = up_conv(in_channels[1],in_channels[0])
+        self.dc4 = DoubleConv(in_channels[0]*2,in_channels[0])
+        # #分类
+        self.to_segmentation = nn.Sequential(
+            DoubleConv(in_channels[0]*2,in_channels[0]),
+            nn.Conv2d(in_channels[0], num_classes, 1),)
+        
+    def forward(self, x1,x2):           
+        x_1 = self.low_c(x1)
+        output = self.dc1(x2[3])
+        output = self.up1(output)
+        output = self.dc2(torch.cat([output,x2[2]], dim=1))
+        output = self.up2(output)
+        output = self.dc3(torch.cat([output,x2[1]], dim=1))
+        output = self.up3(output)
+        output = self.dc4(torch.cat([output,x2[0]], dim=1))
+        # (2,32,128,128)
+        output = F.interpolate(output, size=(512, 512), mode='bilinear', align_corners=True)
+        output = self.to_segmentation(torch.cat([x_1,output],dim=1))
+       
+        return output
 
 class SegFormer(nn.Module):
     def __init__(self, num_classes = 21, phi = 'b0', decode_name="unet_head", pretrained = False):
         super(SegFormer, self).__init__()
+        self.name = decode_name
         self.in_channels = {
             'b0': [32, 64, 160, 256], 'b1': [64, 128, 320, 512], 'b2': [64, 128, 320, 512],
             'b3': [64, 128, 320, 512], 'b4': [64, 128, 320, 512], 'b5': [64, 128, 320, 512],
@@ -599,28 +638,36 @@ class SegFormer(nn.Module):
             'b3': 768, 'b4': 768, 'b5': 768,
         }[phi]
 
-        self.decode_head   = {
-            'SegFormerHead': SegFormerHead,
-            'unet_head': unet_head,
-            'DSWunet_head': DSWunet_head,
+        if self.name[:3]!="Low":
+            self.decode_head   = {
+                'SegFormerHead': SegFormerHead,
+                'unet_head': unet_head,
+                'DSWunet_head': DSWunet_head,
+            }[decode_name](num_classes, self.in_channels)
+        else:
+            self.decode_head   = {
+            'Low_level_unet_head': Low_level_unet_head,
+            # 'Low_level_DSWunet_head': Low_level_DSWunet_head,
         }[decode_name](num_classes, self.in_channels)
+
 
     def forward(self, inputs):
         H, W = inputs.size(2), inputs.size(3)
         # 0(128,64,32,16) 1(128,64,32,16) 
-        x = self.backbone.forward(inputs)
-        x = self.decode_head.forward(x)
+        output = self.backbone.forward(inputs)
+        if self.name[:3]!="Low":
+            output = self.decode_head.forward(output)
+        else:
+            output = self.decode_head.forward(inputs,output)
         
-        x = F.interpolate(x, size=(H, W), mode='bilinear', align_corners=True)
-        return x
-    
+        return output
 
 def segformer_m(num_classes=2):
 
-    model = SegFormer(
-    phi='b1',
-    decode_name = "unet_head",                  # "unet_head" "SegFormerHead" "DSWunet_head"
-    num_classes = num_classes,                  # number of segmentation classes
+    model = SegFormer(                             #    SegFormer         
+    phi='b0',
+    decode_name = "Low_level_unet_head",           # "SegFormerHead" "unet_head" "DSWunet_head"   "Low_level_unet_head"  "Low_level_DSWunet_head"
+    num_classes = num_classes,                     # number of segmentation classes
     pretrained = False
     )
 
@@ -629,9 +676,10 @@ def segformer_m(num_classes=2):
 if __name__ =="__main__":
     model = segformer_m()
     
-    x = torch.randn(2, 3, 512, 512)
-    pred = model(x)
-    print(pred.shape)
-    # print(model)
+    # x = torch.randn(2, 3, 512, 512)
+    # pred = model(x)
+    # print(pred.shape)
+
+    print(model)
     # y = mit(x)
     # print(y.shape)
