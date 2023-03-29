@@ -20,7 +20,7 @@ def get_arguments():
                         default="D:\\software\\Code\\codefile\\mseg\\results")#D:\\software\\Code\\codefile\\mseg\\results
     parser.add_argument("--input_size", type=list, default=[512,512],
                         help="Comma-separated string with height and width of images.")
-    parser.add_argument("--traindata_rate", type=int, default=0.9,
+    parser.add_argument("--traindata_rate", type=int, default=0.2,
                         help="Proportion of training datasets.") 
     
     ###### ------------ 设置模型 --------------- ######
@@ -120,7 +120,7 @@ def main(config):
             # 保存loss值最小的网络参数
             if loss.item() < best_loss:
                 best_loss = loss.item()
-                torch.save(net.state_dict(), os.path.join(save_pth,'last_model.pth'))
+                torch.save(net.state_dict(), os.path.join(save_pth,'min_loss_model.pth'))
             # 更新参数
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -129,7 +129,8 @@ def main(config):
         scheduler.step()
 
         #模型验证
-        if len(trainval_dataset) !=0 and (epoch+1) % 10==0:
+        if len(trainval_dataset) !=0 and (epoch+1) % 1==0:
+            torch.save(net.state_dict(), os.path.join(save_pth,"epoch_"+str(epoch+1)+'_model.pth'))
             net.eval()
             with torch.no_grad():
                 hist = np.zeros((config.num_classes, config.num_classes))
