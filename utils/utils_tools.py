@@ -3,19 +3,19 @@ from PIL import Image
 
 #优化器
 def SGD(net,lr=0.01):
-    optimizer = torch.optim.SGD(net.parameters(), lr=lr,momentum=0.9,weight_decay=0.0005)
+    optimizer = torch.optim.SGD(net.parameters(), lr=lr,momentum=0.9,weight_decay=0.0005,eps=1e-5)
     return optimizer
 
 def adam(net,lr=0.01,betas=(0.9,0.999)):
-    optimizer = torch.optim.Adam(net.parameters(), lr=lr, betas=betas)
+    optimizer = torch.optim.Adam(net.parameters(), lr=lr, betas=betas,eps=1e-5)
     return optimizer
 
 def adamw(net,lr=0.01,betas=(0.9,0.999)):
-    optimizer = torch.optim.AdamW(net.parameters(), lr=lr, betas=betas)
+    optimizer = torch.optim.AdamW(net.parameters(), lr=lr, betas=betas,eps=1e-5)
     return optimizer
 
 def RMSprop(net,lr=0.01,weight_decay=1e-8, momentum=0.9):
-    optimizer = torch.optim.RMSprop(net.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum)
+    optimizer = torch.optim.RMSprop(net.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum,eps=1e-5)
     return optimizer
 
 #学习率优化算法

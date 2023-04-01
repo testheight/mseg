@@ -38,7 +38,7 @@ def get_arguments():
                         help="[SGD, adam ,adamw,RMSprop].")
     parser.add_argument("--lr_scheduler", type=str, default="CosLR",
                         help="[ExponentialLR,CosLR].")
-    parser.add_argument("--criterion", type=str, default="focal_loss",
+    parser.add_argument("--criterion", type=str, default="CrossEntropy_Loss",
                         help="[CriterionOhemDSN, CriterionDSN ,CrossEntropy_Loss,focal_loss].")
     parser.add_argument("--lr", type=float, default=1e-4,
                         help="Base learning rate for training with polynomial decay.")
