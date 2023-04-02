@@ -498,8 +498,6 @@ class SegFormerHead(nn.Module):
 
 # 双卷积
 class DoubleConv(nn.Module):
-    """(convolution => [BN] => ReLU) * 2"""
-
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.double_conv = nn.Sequential(
@@ -512,6 +510,17 @@ class DoubleConv(nn.Module):
         )
     def forward(self, x):
         return self.double_conv(x)
+# 单卷积
+class SingleConv(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.single_conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+        )
+    def forward(self, x):
+        return self.single_conv(x)
 #上采样
 class up_conv(nn.Module):
     """
@@ -557,7 +566,36 @@ class unet_head(nn.Module):
         output = self.to_segmentation(output)
         output = F.interpolate(output, size=(512, 512), mode='bilinear', align_corners=True)
         return output
-    
+
+    # 类unet_head 
+class unet_single_head(nn.Module):
+    def __init__(self, num_classes = 2,in_channels=[32, 64, 160, 256]):
+        super(unet_single_head, self).__init__()
+                #改进类似unet解码结构 method1            &&-----已训练-----&&
+        self.dc1 = SingleConv(in_channels[3],in_channels[3])
+        self.up1 = up_conv(in_channels[3],in_channels[2])
+        self.dc2 = SingleConv(in_channels[2]*2,in_channels[2])
+        self.up2 = up_conv(in_channels[2],in_channels[1])
+        self.dc3 = SingleConv(in_channels[1]*2,in_channels[1])
+        self.up3 = up_conv(in_channels[1],in_channels[0])
+        self.dc4 = SingleConv(in_channels[0]*2,in_channels[0])
+        self.to_segmentation = nn.Sequential(
+            nn.Conv2d(in_channels[0], num_classes, 1),)
+        
+    def forward(self, x):           
+        # methond1
+        output = self.dc1(x[3])
+        output = self.up1(output)
+        output = self.dc2(torch.cat([output,x[2]], dim=1))
+        output = self.up2(output)
+        output = self.dc3(torch.cat([output,x[1]], dim=1))
+        output = self.up3(output)
+        output = self.dc4(torch.cat([output,x[0]], dim=1))
+        # (2,32,128,128)
+        output = self.to_segmentation(output)
+        output = F.interpolate(output, size=(512, 512), mode='bilinear', align_corners=True)
+        return output
+
    # 类unet_head + 深层可分离卷积
 class DSWunet_head(nn.Module):
     def __init__(self, num_classes = 2,in_channels=[32, 64, 160, 256]):
@@ -676,6 +714,7 @@ class SegFormer(nn.Module):
                 'SegFormerHead': SegFormerHead,
                 'unet_head': unet_head,
                 'DSWunet_head': DSWunet_head,
+                'unet_single_head':unet_single_head,
             }[decode_name](num_classes, self.in_channels)
         else:
             self.decode_head   = {
@@ -699,7 +738,7 @@ def segformer_m(num_classes=2):
 
     model = SegFormer(                             #    SegFormer         
     phi='b0',
-    decode_name = "Low_level_DSWunet_head",           # "SegFormerHead" "unet_head" "DSWunet_head"   "Low_level_unet_head"  "Low_level_DSWunet_head"
+    decode_name = "unet_single_head",           # "SegFormerHead" "unet_head" "unet_single_head" "DSWunet_head"   "Low_level_unet_head"  "Low_level_DSWunet_head"
     num_classes = num_classes,                     # number of segmentation classes
     pretrained = False
     )
@@ -716,3 +755,10 @@ if __name__ =="__main__":
     # print(model)
     # y = mit(x)
     # print(y.shape)
+    
+    from thop import profile
+    model = segformer_m()
+    x = torch.randn(2, 3, 512, 512)
+    flops , params = profile(model,inputs=(x,))
+    print(flops)
+    print(params)
