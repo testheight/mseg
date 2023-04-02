@@ -612,7 +612,7 @@ class SwinUnet_o(nn.Module):
         return logits
 
     def load_from(self):
-        pretrained_path = None
+        pretrained_path = r"D:\software\Code\codefile\result\pretrain\swin_tiny_patch4_window7_224.pth"
         if pretrained_path is not None:
             print("pretrained_path:{}".format(pretrained_path))
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -640,7 +640,7 @@ class SwinUnet_o(nn.Module):
             for k in list(full_dict.keys()):
                 if k in model_dict:
                     if full_dict[k].shape != model_dict[k].shape:
-                        print("delete:{};shape pretrain:{};shape model:{}".format(k,v.shape,model_dict[k].shape))
+                        # print("delete:{};shape pretrain:{};shape model:{}".format(k,v.shape,model_dict[k].shape))
                         del full_dict[k]
 
             msg = self.swin_unet.load_state_dict(full_dict, strict=False)
@@ -652,6 +652,7 @@ def swinunet_m(num_classes=2):
     model = SwinUnet_o(
         num_classes=num_classes
     )
+    model.load_from()
     return model
 
 

@@ -15,29 +15,6 @@ def replace_path(a):
     a = a.replace("\\", "/")
     return a
 
-def get_b16_config():
-    """Returns the ViT-B/16 configuration."""
-    config = ml_collections.ConfigDict()
-    config.patches = ml_collections.ConfigDict({'size': (16, 16)})
-    config.hidden_size = 768
-    config.transformer = ml_collections.ConfigDict()
-    config.transformer.mlp_dim = 3072
-    config.transformer.num_heads = 12
-    config.transformer.num_layers = 12
-    config.transformer.attention_dropout_rate = 0.0
-    config.transformer.dropout_rate = 0.1
-    config.n_skip = 0
-
-    config.classifier = 'seg'
-    config.representation_size = None
-    config.resnet_pretrained_path = None
-    config.pretrained_path = "D:/software/Code/codefile/result/pretrain/ViT-B_16.npz"
-    config.patch_size = 16
-
-    config.decoder_channels = (256, 128, 64, 16)
-    config.n_classes = 2
-    config.activation = 'softmax'
-    return config
 
 ATTENTION_Q = "MultiHeadDotProductAttention_1/query"
 ATTENTION_K = "MultiHeadDotProductAttention_1/key"
@@ -635,6 +612,30 @@ class VisionTransformer(nn.Module):
                 for bname, block in self.transformer.embeddings.hybrid_model.body.named_children():
                     for uname, unit in block.named_children():
                         unit.load_from(res_weight, n_block=bname, n_unit=uname)
+def get_b16_config():
+    """Returns the ViT-B/16 configuration."""
+    config = ml_collections.ConfigDict()
+    config.patches = ml_collections.ConfigDict({'size': (16, 16)})
+    config.hidden_size = 768
+    config.transformer = ml_collections.ConfigDict()
+    config.transformer.mlp_dim = 3072
+    config.transformer.num_heads = 12
+    config.transformer.num_layers = 12
+    config.transformer.attention_dropout_rate = 0.0
+    config.transformer.dropout_rate = 0.1
+    config.n_skip = 0
+
+    config.classifier = 'seg'
+    config.representation_size = None
+    config.resnet_pretrained_path = None
+    config.pretrained_path = "D:/software/Code/codefile/result/pretrain/ViT-B_16.npz"
+    config.patch_size = 16
+
+    config.decoder_channels = (256, 128, 64, 16)
+    config.n_classes = 2
+    config.activation = 'softmax'
+    return config
+
 def tranunet(num_class=2):
     config=get_b16_config()
     config.n_classs=num_class

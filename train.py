@@ -4,7 +4,7 @@ import numpy as np
 from tqdm import tqdm
 from torch.cuda.amp import autocast, GradScaler
 
-from model import transunet_m,swinunet_m,deeplabv3p_smp,unet_smp,segformer_m,pspnet_smp,segnet_m
+from model import swinunet_m,deeplabv3p_smp,unet_smp,segformer_m,pspnet_smp,segnet_m
 from utils import train_Dataset,log_output,fast_hist,per_class_iu,per_class_PA_Recall,per_class_Precision
 from utils import adamw,ExponentialLR,CosLR,CrossEntropy_Loss,focal_loss
 
@@ -20,7 +20,7 @@ def get_arguments():
                         default="D:\\software\\Code\\codefile\\mseg\\results")#D:\\software\\Code\\codefile\\mseg\\results
     parser.add_argument("--input_size", type=list, default=[512,512],
                         help="Comma-separated string with height and width of images.")
-    parser.add_argument("--traindata_rate", type=int, default=0.2,
+    parser.add_argument("--traindata_rate", type=int, default=0.9,
                         help="Proportion of training datasets.") 
     
     ###### ------------ 设置模型 --------------- ######
@@ -83,7 +83,7 @@ def main(config):
     # 学习率优化算法
     scheduler = eval(config.lr_scheduler)(optimizer)
     # 定义Loss算法
-    criterion = eval(config.criterion)
+    criterion = eval(config.criterion)()
 
     # 打印各种参数
     logger.info('Segformer_primary + 改善最后的解码头 +cos +crossloss +adaw')
@@ -129,7 +129,7 @@ def main(config):
         scheduler.step()
 
         #模型验证
-        if len(trainval_dataset) !=0 and (epoch+1) % 1==0:
+        if len(trainval_dataset) !=0 and (epoch+1) % 10==0:
             torch.save(net.state_dict(), os.path.join(save_pth,"epoch_"+str(epoch+1)+'_model.pth'))
             net.eval()
             with torch.no_grad():
