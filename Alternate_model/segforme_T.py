@@ -376,9 +376,9 @@ class Segformer_upsample(nn.Module):
         ) for i, dim in enumerate(dims)])
 
         # 改方法1(亚像素)   &&-----已训练-----&&
-        self.to_segmentation1 = nn.Sequential(
-            nn.PixelShuffle(4),
-            nn.Conv2d(decoder_dim//4, num_classes, 1),)
+        # self.to_segmentation1 = nn.Sequential(
+        #     nn.PixelShuffle(4),
+        #     nn.Conv2d(decoder_dim//4, num_classes, 1),)
         
         # 改方法2(反卷积)   &&-----已训练-----&&
         self.to_segmentation2 = nn.Sequential(
@@ -598,7 +598,7 @@ def segformer_m(num_classes=2):
     '''
     调用 模型  Segformer_primary   Segformer_unet
     '''
-    model = Segformer_primary(
+    model = Segformer_primary(     # Segformer_primary
     dims = (32, 64, 160, 256),      # dimensions of each stage
     heads = (1, 2, 5, 8),           # heads of each stage
     ff_expansion = (8, 8, 4, 4),    # feedforward expansion factor of each stage
@@ -613,9 +613,14 @@ def segformer_m(num_classes=2):
 if __name__ =="__main__":
     model = segformer_m()
     
-    x = torch.randn(2, 3, 512, 512)
+    # x = torch.randn(2, 3, 512, 512)
     # pred = model(x)
     # print(pred.shape)
     # print(model)
     # y = mit(x)
     # print(y.shape)
+    from thop import profile
+    x = torch.randn(2, 3, 512, 512)
+    flops , params = profile(model,inputs=(x,))
+    print(flops)
+    print(params)

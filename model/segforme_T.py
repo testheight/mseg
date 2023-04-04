@@ -738,7 +738,7 @@ def segformer_m(num_classes=2):
 
     model = SegFormer(                             #    SegFormer         
     phi='b0',
-    decode_name = "unet_single_head",           # "SegFormerHead" "unet_head" "unet_single_head" "DSWunet_head"   "Low_level_unet_head"  "Low_level_DSWunet_head"
+    decode_name = "unet_head",           # "SegFormerHead" "unet_head" "unet_single_head" "DSWunet_head"   "Low_level_unet_head"  "Low_level_DSWunet_head"
     num_classes = num_classes,                     # number of segmentation classes
     pretrained = False
     )
@@ -748,11 +748,11 @@ def segformer_m(num_classes=2):
 if __name__ =="__main__":
     model = segformer_m()
     
-    x = torch.randn(2, 3, 512, 512)
-    pred = model(x)
-    print(pred.shape)
+    # x = torch.randn(2, 3, 512, 512)
+    # pred = model(x)
+    # print(pred.shape)
 
-    # print(model)
+    print(model)
     # y = mit(x)
     # print(y.shape)
     

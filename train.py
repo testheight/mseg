@@ -4,7 +4,7 @@ import numpy as np
 from tqdm import tqdm
 from torch.cuda.amp import autocast, GradScaler
 
-from model import swinunet_m,deeplabv3p_smp,unet_smp,segformer_m,pspnet_smp,segnet_m
+from model import swinunet_m,deeplabv3p_smp,unet_smp,segformer_m,pspnet_smp,segnet_m,transunet_m
 from utils import train_Dataset,log_output,fast_hist,per_class_iu,per_class_PA_Recall,per_class_Precision
 from utils import adamw,ExponentialLR,CosLR,CrossEntropy_Loss,focal_loss
 
@@ -24,7 +24,7 @@ def get_arguments():
                         help="Proportion of training datasets.") 
     
     ###### ------------ 设置模型 --------------- ######
-    parser.add_argument("--arch", type=str, default="unet_smp", 
+    parser.add_argument("--arch", type=str, default="transunet_m", 
                         help="[transunet_m,swinunet_m,deeplabv3p_smp,unet_smp,pspnet_smp,segnet_m,segformer_m]")
     parser.add_argument("--num_classes", type=int, default=2,
                         help="Number of classes to predict (including background).")
@@ -86,7 +86,7 @@ def main(config):
     criterion = eval(config.criterion)()
 
     # 打印各种参数
-    logger.info('Segformer_primary + 改善最后的解码头 +cos +crossloss +adaw')
+    logger.info('transunet +cos +crossloss +adaw')
     logger.info('epochs: {}, batch_size: {}, lr: {}'.format(config.epochs,config.batch_size,config.lr))
     logger.info(net)
     logger.info('optimizer:{}'.format(config.optimizer))

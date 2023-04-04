@@ -636,16 +636,16 @@ def get_b16_config():
     config.activation = 'softmax'
     return config
 
-def tranunet(num_class=2):
+def transunet_m(num_class=2):
     config=get_b16_config()
     config.n_classs=num_class
-    net = VisionTransformer(config,img_size=224)
+    net = VisionTransformer(config,img_size=512)
     net.load_from(weights=np.load(config.pretrained_path))
     return net
     
 
 if __name__ == "__main__":
-    x = torch.rand(2,3,224,224)
-    net = tranunet(num_class=2)
+    x = torch.rand(2,3,512,512)
+    net = transunet_m(num_class=2)
     y=net(x).shape
     print(y)
