@@ -652,7 +652,7 @@ def swinunet_m(num_classes=2):
     model = SwinUnet_o(
         num_classes=num_classes
     )
-    model.load_from()
+    # model.load_from()
     return model
 
 

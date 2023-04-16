@@ -11,8 +11,10 @@ def pspnet_smp(num_classes=2):
     return model
 
 if __name__ == "__main__":
-    a = torch.rand(2,3,512,512)
+        
+    from thop import profile
     net = pspnet_smp()
-    print(net)
-    mask = net(a)
-    print(mask.shape)
+    x = torch.randn(2, 3, 512, 512)
+    flops , params = profile(net,inputs=(x,))
+    print(flops)
+    print(params)

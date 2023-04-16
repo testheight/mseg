@@ -78,18 +78,44 @@ class test_Dataset(Dataset):
     def __len__(self):
         return len(self.images)
 
-def test_data():
-    data_dir = r'/home/lijiangtao/Desktop/T/mseg/datasets/root_data'
-    datas = train_Dataset(data_dir)
+class demo_dataset(Dataset):
+    def __init__(self,data_dir):
+        self.data_dir = data_dir
+        #建立数据列表
+        images = []
+        for name in os.listdir(data_dir):
+                images.append(os.path.join(data_dir,name))
+        self.images = images
+        
+    def __getitem__(self, index):
+        #读取图像
+        img_path =  self.images[index]
+        imgs_id = img_path.split("\\")[-1].split(".")[0]
+        imgs = cv2.imread(img_path)
+        imgs = cv2.cvtColor(imgs, cv2.COLOR_BGR2RGB)
+        #数据增强
+        transform = A.Compose([
+                A.Resize(2144, 3008),
+                A.Normalize (mean=[0.4754358, 0.35509014, 0.282971],std=[0.16318515, 0.15616792, 0.15164918]),
+                ToTensorV2(),
+            ])
+        transformed = transform(image=imgs)
+        imgs = transformed['image']
+        return imgs,imgs_id
+    
+    def __len__(self):
+        return len(self.images)
 
+# def test_data():
+#     data_dir = r'/home/lijiangtao/Desktop/T/mseg/datasets/root_data'
+#     datas = train_Dataset(data_dir)
 
+#     train_size = int(0.9 * len(datas))  # 整个训练集中，百分之90为训练集
+#     test_size = len(datas) - train_size
+#     train_dataset, test_dataset = random_split(datas, [train_size, test_size])  # 划分训练集和测试集
 
-    train_size = int(0.9 * len(datas))  # 整个训练集中，百分之90为训练集
-    test_size = len(datas) - train_size
-    train_dataset, test_dataset = random_split(datas, [train_size, test_size])  # 划分训练集和测试集
-
-    print(len(train_dataset))
-    print(len(test_dataset))
+#     print(len(train_dataset))
+#     print(len(test_dataset))
 
     # mydataloader = DataLoader(train_dataset, batch_size=4, shuffle=False,num_workers=1)
     # img_tensor1,img_tensor2 = next(iter(mydataloader))
@@ -107,5 +133,5 @@ if __name__ == "__main__":
     #     print('image shape:',image.shape)
     #     print('label shape:',label.shape)
 
-    test_data()
-    # pass
+    # test_data()
+    pass

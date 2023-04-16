@@ -598,7 +598,7 @@ def segformer_m(num_classes=2):
     '''
     调用 模型  Segformer_primary   Segformer_unet
     '''
-    model = Segformer_primary(     # Segformer_primary
+    model = Segformer_deeplabv3plus(     # Segformer_primary
     dims = (32, 64, 160, 256),      # dimensions of each stage
     heads = (1, 2, 5, 8),           # heads of each stage
     ff_expansion = (8, 8, 4, 4),    # feedforward expansion factor of each stage
