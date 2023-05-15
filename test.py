@@ -4,6 +4,7 @@ from utils import compute_mIoU, show_results,test_Dataset,demo_dataset
 import numpy as np
 from model import transunet_m,swinunet_m,deeplabv3p_smp,unet_smp,pspnet_smp,segnet_m
 from utils import Stitching_images
+from PIL import Image
 
 
 def cal_miou(test_dir,result_dir):                      # ---图像测试集路径和标签路径----#
@@ -62,12 +63,13 @@ def cal_miou(test_dir,result_dir):                      # ---图像测试集路�
 
 
 def infer(para_path,test_dir,save_path):
+    num_classes = 2
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
     testdata = demo_dataset(test_dir)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')       # --------选择容器-------#
-    net = unet_smp(num_classes = 2)                                         # --------加载网络-------#
+    net = unet_smp(num_classes = num_classes)                                         # --------加载网络-------#
     net.to(device=device)                                                       # ---将网络拷贝到deivce中--#
     state_dict = torch.load(para_path, map_location=device)
     net.load_state_dict(state_dict) # 从新加载这个模型。
@@ -83,9 +85,19 @@ def infer(para_path,test_dir,save_path):
             pred = net(img)                                                         # --------预测图像---------#
 
             pred = (torch.nn.functional.softmax(pred[0],dim=0)).data.cpu()          # --------转换为array------#
-            pred = np.array(pred.argmax(axis=0))*255
+            if num_classes==2:
+                pred = np.array(pred.argmax(axis=0))*255
+                cv2.imwrite(os.path.join(save_path,id+".png"),pred)
+            else:
+                pred = np.array(pred.argmax(axis=0)).astype(np.int8)
 
-            cv2.imwrite(os.path.join(save_path,id+".png"),pred) 
+                pred = Image.fromarray(pred)
+                pred = pred.convert('L')
+                #调色板
+                palette = [0, 0, 0,0, 255, 0, 255, 0, 0,255,255,255]
+                #着色
+                pred.putpalette(palette)
+                pred.save(os.path.join(save_path,id+".png"))
 
 
 if __name__ == '__main__':
@@ -94,5 +106,5 @@ if __name__ == '__main__':
     #          result_dir=r"D:\software\Code\codefile\mseg\results\unet_smp\3-25-18-34")
     
     infer(para_path =  r"D:\31890\Desktop\codefile\result\mseg_result\2\unet_smp\3-24-17-57\last_model.pth",
-          test_dir=r"D:\31890\Desktop\codefile\mseg\image",
-          save_path=r"D:\31890\Desktop\codefile\mseg\image2")
+          test_dir=r"D:\31890\Desktop\tranformer\senescence\2_S",
+          save_path=r"D:\31890\Desktop\tranformer\senescence\heibai")
