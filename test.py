@@ -2,11 +2,11 @@ import os,cv2,torch
 from tqdm import tqdm
 from utils import compute_mIoU, show_results,test_Dataset,demo_dataset
 import numpy as np
-from model import transunet_m,swinunet_m,deeplabv3p_smp,unet_smp,pspnet_smp,segnet_m
+from model import unet_smp
 from utils import Stitching_images
 from PIL import Image
 
-
+# 测试集验证
 def cal_miou(test_dir,result_dir):                      # ---图像测试集路径和标签路径----#
 
     num_classes = 2                                     # -----------分类个数----------#
@@ -61,7 +61,7 @@ def cal_miou(test_dir,result_dir):                      # ---图像测试集路�
     show_results(os.path.join(result_dir,'metric'), hist, IoUs,                 # -----生成mIoU的图像------#
                  PA_Recall, Precision, name_classes)
 
-
+# 预测分割小图
 def infer(para_path,test_dir,save_path):
     num_classes = 2
     if not os.path.exists(save_path):
@@ -69,7 +69,7 @@ def infer(para_path,test_dir,save_path):
 
     testdata = demo_dataset(test_dir)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')       # --------选择容器-------#
-    net = unet_smp(num_classes = num_classes)                                         # --------加载网络-------#
+    net = unet_smp(num_classes = num_classes)                                   # --------加载网络-------#
     net.to(device=device)                                                       # ---将网络拷贝到deivce中--#
     state_dict = torch.load(para_path, map_location=device)
     net.load_state_dict(state_dict) # 从新加载这个模型。
@@ -99,12 +99,74 @@ def infer(para_path,test_dir,save_path):
                 pred.putpalette(palette)
                 pred.save(os.path.join(save_path,id+".png"))
 
+# 预测大图
+def infer2(para_path,test_dir,save_path,num_classes = 2,pixel_shape=512):
+    num_classes = 2
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+    testdata = demo_dataset(test_dir)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')       # --------选择容器-------#
+    net = unet_smp(num_classes = num_classes)                                   # --------加载网络-------#
+    net.to(device=device)                                                       # ---将网络拷贝到deivce中--#
+    state_dict = torch.load(para_path, map_location=device)
+    net.load_state_dict(state_dict) # 从新加载这个模型。
+
+    net.eval()
+    with torch.no_grad():
+        for i in tqdm(range(len(testdata))):
+            img, id = testdata[i]
+            img = img.permute(1,2,0)
+            img_array = img.numpy()
+            h,w,c = img_array.shape
+            if h//pixel_shape!=0 and w//pixel_shape!=0:
+                h_n = (h//pixel_shape+1)*pixel_shape
+                w_n = (w//pixel_shape+1)*pixel_shape
+                h_padding = h_n-h
+                w_padding = w_n-w
+
+            img2 = cv2.copyMakeBorder(img_array,0,h_padding,0,w_padding,cv2.BORDER_CONSTANT)
+            img3 = torch.from_numpy(img2)
+            img3 = img3.permute(2,0,1)
+            img3 = img3.unsqueeze(0) 
+            pred_result = torch.from_numpy(np.empty((1,num_classes,h_n,w_n)))
+
+            for u in range(h//pixel_shape):
+                for v in range(w//pixel_shape):
+                    x = pixel_shape * u
+                    y = pixel_shape * v
+                    sub_img = img3[:,:,x : x + pixel_shape, y : y + pixel_shape]
+                    sub_img = sub_img.to(device=device, dtype=torch.float32)                        # ---tensor拷贝到device中--#
+                    pred = net(sub_img)                                                         # --------预测图像---------#
+                    pred_result[:,:,x : x + pixel_shape, y : y + pixel_shape] = pred.cpu()
+
+            pred_result = (torch.nn.functional.softmax(pred_result[0],dim=0)).data.cpu()          # --------转换为array------#
+            pred_result = pred_result[:,0:h,0:w]
+            
+            if num_classes==2:
+                pred_result = np.array(pred_result.argmax(axis=0))*255
+                cv2.imwrite(os.path.join(save_path,id+".png"),pred_result)
+            else:
+                pred_result = np.array(pred_result.argmax(axis=0)).astype(np.int8)
+
+                pred_result = Image.fromarray(pred_result)
+                pred_result = pred_result.convert('L')
+                #调色板
+                palette = [0, 0, 0,0, 255, 0, 255, 0, 0,255,255,255]
+                #着色
+                pred.putpalette(palette)
+                pred.save(os.path.join(save_path,id+".png"))
+
 
 if __name__ == '__main__':
 
     # cal_miou(test_dir = r"D:\software\Code\codefile\result\mydata\model_test_data",         #测试数据集
     #          result_dir=r"D:\software\Code\codefile\mseg\results\unet_smp\3-25-18-34")
     
-    infer(para_path =  r"D:\31890\Desktop\codefile\result\mseg_result\2\unet_smp\3-24-17-57\last_model.pth",
-          test_dir=r"D:\31890\Desktop\tranformer\senescence\2_S",
-          save_path=r"D:\31890\Desktop\tranformer\senescence\heibai")
+    # infer(para_path =  r"D:\31890\Desktop\codefile\data\mseg_result\2\unet_smp\3-24-17-57\last_model.pth",
+    #       test_dir=r"D:\31890\Desktop\codefile\data\Train_data\Datasets\1-100_o",
+    #       save_path=r"D:\31890\Desktop\codefile\mseg\result\test")
+    
+    infer2(para_path =  r"D:\31890\Desktop\codefile\data\mseg_result\2\unet_smp\3-24-17-57\last_model.pth",
+          test_dir=r"D:\31890\Desktop\codefile\data\Train_data\Datasets\1-100_o",
+          save_path=r"D:\31890\Desktop\codefile\mseg\result\test")

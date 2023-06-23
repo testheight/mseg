@@ -4,12 +4,12 @@ import torch.nn.functional as F
 import warnings
 import numpy as np
 from functools import partial
-from timm.models.efficientnet_blocks import DepthwiseSeparableConv
+from timm.models._efficientnet_blocks import DepthwiseSeparableConv
 
 def _no_grad_trunc_normal_(tensor, mean, std, a, b):
 
     def norm_cdf(x):
-        # Computes standard normal cumulative distribution function
+        # Computes standard normal cumulative distribution functions
         return (1. + math.erf(x / math.sqrt(2.))) / 2.
 
     if (mean < a - 2 * std) or (mean > b + 2 * std):

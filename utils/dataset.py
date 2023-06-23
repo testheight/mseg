@@ -95,7 +95,7 @@ class demo_dataset(Dataset):
         imgs = cv2.cvtColor(imgs, cv2.COLOR_BGR2RGB)
         #数据增强
         transform = A.Compose([
-                A.Resize(2144, 3008),
+                # A.Resize(2144, 3008),
                 A.Normalize (mean=[0.4754358, 0.35509014, 0.282971],std=[0.16318515, 0.15616792, 0.15164918]),
                 ToTensorV2(),
             ])
