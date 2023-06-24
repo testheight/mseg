@@ -124,6 +124,18 @@ def infer2(para_path,test_dir,save_path,num_classes = 2,pixel_shape=512):
                 w_n = (w//pixel_shape+1)*pixel_shape
                 h_padding = h_n-h
                 w_padding = w_n-w
+            if h//pixel_shape==0:
+                h_n = pixel_shape
+                h_padding = h_n-h
+            if w//pixel_shape==0:
+                w_n = pixel_shape
+                w_padding = w_n-w
+            if h//pixel_shape!=0:
+                h_n = (h//pixel_shape+1)*pixel_shape
+                h_padding = h_n-h
+            if w//pixel_shape!=0:
+                w_n = (w//pixel_shape+1)*pixel_shape
+                w_padding = w_n-w
 
             img2 = cv2.copyMakeBorder(img_array,0,h_padding,0,w_padding,cv2.BORDER_CONSTANT)
             img3 = torch.from_numpy(img2)
@@ -131,8 +143,8 @@ def infer2(para_path,test_dir,save_path,num_classes = 2,pixel_shape=512):
             img3 = img3.unsqueeze(0) 
             pred_result = torch.from_numpy(np.empty((1,num_classes,h_n,w_n)))
 
-            for u in range(h//pixel_shape):
-                for v in range(w//pixel_shape):
+            for u in range(h_n//pixel_shape):
+                for v in range(w_n//pixel_shape):
                     x = pixel_shape * u
                     y = pixel_shape * v
                     sub_img = img3[:,:,x : x + pixel_shape, y : y + pixel_shape]
@@ -156,7 +168,6 @@ def infer2(para_path,test_dir,save_path,num_classes = 2,pixel_shape=512):
                 #着色
                 pred.putpalette(palette)
                 pred.save(os.path.join(save_path,id+".png"))
-
 
 if __name__ == '__main__':
 
