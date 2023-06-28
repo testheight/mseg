@@ -4,7 +4,7 @@ import numpy as np
 from tqdm import tqdm
 from torch.cuda.amp import autocast, GradScaler
 
-from model import swinunet_m,deeplabv3p_smp,unet_smp,segformer_m,pspnet_smp,segnet_m,transunet_m
+from model import U_Net_o
 from utils import train_Dataset,log_output,fast_hist,per_class_iu,per_class_PA_Recall,per_class_Precision
 from utils import adamw,ExponentialLR,CosLR,CrossEntropy_Loss,focal_loss
 
@@ -59,8 +59,9 @@ def main(config):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     #重新设置保存路径，在原始路径下添加时间文件夹
-    save_pth = os.path.join(config.save_dir,config.arch,str(time.localtime()[1])+"-"+str(time.localtime()[2])
-                            +"-"+str(time.localtime()[3])+"-"+str(time.localtime()[4]))
+    # save_pth = os.path.join(config.save_dir,config.arch,str(time.localtime()[1])+"-"+str(time.localtime()[2])
+    #                         +"-"+str(time.localtime()[3])+"-"+str(time.localtime()[4]))
+    save_pth = os.path.join(config.save_dir,'U_Net','3_U_Net_top2bottom_1')
     if not os.path.exists(save_pth):
         os.makedirs(save_pth)
     
