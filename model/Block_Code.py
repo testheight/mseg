@@ -4,9 +4,26 @@ import torch.utils.data
 import torch
 from timm.models._efficientnet_blocks import DepthwiseSeparableConv
 
+class single_block(nn.Module):
+    """
+    single Convolution Block                         单层卷积
+    """
+    def __init__(self, in_ch, out_ch):
+        super(single_block, self).__init__()
+
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_ch, out_ch, kernel_size=3, stride=1, padding=1, bias=True),
+            # 在卷积神经网络的卷积层之后总会添加BatchNorm2d进行数据的归一化处理，这使得数据在进行Relu之前不会因为数据过大而导致网络性能的不稳定
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=True))
+
+    def forward(self, x):
+        x = self.conv(x)
+        return x   
+
 class conv_block(nn.Module):
     """
-    Convolution Block
+    Dual Convolution Block                           双层卷积
     """
     def __init__(self, in_ch, out_ch):
         super(conv_block, self).__init__()
@@ -26,7 +43,7 @@ class conv_block(nn.Module):
 
 class dws_conv(nn.Module):
     """
-    DepthwiseSeparable Convolution Block
+    DepthwiseSeparable Convolution Block        深度可分离卷积
     """    
     def __init__(self, in_ch, out_ch):
         super(dws_conv, self).__init__()
@@ -42,7 +59,7 @@ class dws_conv(nn.Module):
 
 class up_conv(nn.Module):
     """
-    Up Convolution Block
+    Up Convolution Block                        上采样
     """
     def __init__(self, in_ch, out_ch):
         super(up_conv, self).__init__()
@@ -59,7 +76,7 @@ class up_conv(nn.Module):
 
 class CBAMLayer(nn.Module):
     '''
-    CBAM  
+    CBAM                                        CBAM注意力机制
     '''
     def __init__(self, channel, reduction=16, spatial_kernel=7):
         super(CBAMLayer, self).__init__()
@@ -89,13 +106,38 @@ class CBAMLayer(nn.Module):
 
 class ChannelAttention(nn.Module):
     """
-    ChannelAttention Module
+    ChannelAttention Module1                    通道注意力机制
+    """
+    def __init__(self, in_planes, ratio=8):
+        """
+        第一层全连接层神经元个数较少,因此需要一个比例系数ratio进行缩放
+        """
+        super(ChannelAttention, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.max_pool = nn.AdaptiveMaxPool2d(1)
+
+        # 利用1x1卷积代替全连接
+        self.fc1   = nn.Conv2d(in_planes, in_planes // ratio, 1, bias=False)
+        self.relu1 = nn.ReLU()
+        self.fc2   = nn.Conv2d(in_planes // ratio, in_planes, 1, bias=False)
+ 
+        self.sigmoid = nn.Sigmoid()
+ 
+    def forward(self, x):
+        avg_out = self.fc2(self.relu1(self.fc1(self.avg_pool(x))))
+        max_out = self.fc2(self.relu1(self.fc1(self.max_pool(x))))
+        out = avg_out + max_out
+        return self.sigmoid(out)
+    
+class ChannelAttention2(nn.Module):
+    """
+    ChannelAttention Module2                    通道注意力机制2
     """
     def __init__(self, in_planes, out_planes, ratio=8):
         """
         第一层全连接层神经元个数较少,因此需要一个比例系数ratio进行缩放
         """
-        super(ChannelAttention, self).__init__()
+        super(ChannelAttention2, self).__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.max_pool = nn.AdaptiveMaxPool2d(1)
 
@@ -114,7 +156,7 @@ class ChannelAttention(nn.Module):
  
 class SpatialAttention(nn.Module):
     '''
-    SpatialAttention 空间注意力机制
+    SpatialAttention                            空间注意力机制
     '''
     def __init__(self, kernel_size=7):
         super(SpatialAttention, self).__init__()
@@ -131,12 +173,12 @@ class SpatialAttention(nn.Module):
         x = self.conv1(x)
         return self.sigmoid(x)
  
-class cbam_block(nn.Module):
+class CBAM(nn.Module):
     '''
-    CBAM 注意力机制
+    CBAM                                        CBAM注意力机制
     '''
     def __init__(self, channel, ratio=8, kernel_size=7):
-        super(cbam_block, self).__init__()
+        super(CBAM, self).__init__()
         self.channelattention = ChannelAttention(channel, ratio=ratio)
         self.spatialattention = SpatialAttention(kernel_size=kernel_size)
  
@@ -147,7 +189,7 @@ class cbam_block(nn.Module):
     
 class ASPP(nn.Module):
     '''
-    Atrous Spatial Pyramid Pooling 空洞卷积空间金字塔池化模块
+    Atrous Spatial Pyramid Pooling              空洞卷积空间金字塔池化模块
     '''
     def __init__(self, dim_in, dim_out, rate=1, bn_mom=0.1):
         super(ASPP, self).__init__()
@@ -205,8 +247,31 @@ class ASPP(nn.Module):
         result = self.conv_cat(feature_cat)
         return result
 
+class SpatialTransformer(nn.Module):
+    '''
+    Spatial Transformer Networks                STN
+    '''
+    def __init__(self, spatial_dims):
+        super(SpatialTransformer, self).__init__()
+        self._h, self._w = spatial_dims 
+        self.fc1 = nn.Linear(32*4*4, 1024) # 可根据自己的网络参数具体设置
+        self.fc2 = nn.Linear(1024, 6)
+
+    def forward(self, x): 
+        batch_images = x #保存一份原始数据
+        x = x.view(-1, 32*4*4)
+        # 利用FC结构学习到6个参数
+        x = self.fc1(x)
+        x = self.fc2(x) 
+        x = x.view(-1, 2,3) # 2x3
+        # 利用affine_grid生成采样点
+        affine_grid_points = F.affine_grid(x, torch.Size((x.size(0), self._in_ch, self._h, self._w)))
+        # 将采样点作用到原始数据上
+        rois = F.grid_sample(batch_images, affine_grid_points)
+        return rois, affine_grid_points
+
 if __name__ == "__main__":
-    net = cbam_block(64)
+    net = CBAM(64)
     x =torch.rand(2,64,64,64)
     y = net(x)
     print(y.shape)

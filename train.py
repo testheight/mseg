@@ -15,16 +15,16 @@ def get_arguments():
     parser.add_argument("--batch_size", type=int, default=4,
                         help="Number of images sent to the network in one step.")
     parser.add_argument("--data_dir", type=str, help="datasets path",
-                        default="D:\\software\\Code\\codefile\\result\\mydata\\model_test_data")#D:\\software\\Code\codefile\\image_result\\mydata\\model_test_data
+                        default="D:\\31890\\Desktop\\codefile\\data\\Train_data\\mseg_test_data")#D:\\software\\Code\codefile\\image_result\\mydata\\model_test_data
     parser.add_argument("--save_dir", type=str,help="save path .",
-                        default="D:\\software\\Code\\codefile\\mseg\\results")#D:\\software\\Code\\codefile\\mseg\\results
+                        default="D:\\31890\\Desktop\\codefile\\mseg\\result")#D:\\software\\Code\\codefile\\mseg\\results
     parser.add_argument("--input_size", type=list, default=[512,512],
                         help="Comma-separated string with height and width of images.")
     parser.add_argument("--traindata_rate", type=int, default=0.9,
                         help="Proportion of training datasets.") 
     
     ###### ------------ 设置模型 --------------- ######
-    parser.add_argument("--arch", type=str, default="transunet_m", 
+    parser.add_argument("--arch", type=str, default="U_Net_o", 
                         help="[transunet_m,swinunet_m,deeplabv3p_smp,unet_smp,pspnet_smp,segnet_m,segformer_m]")
     parser.add_argument("--num_classes", type=int, default=2,
                         help="Number of classes to predict (including background).")
@@ -61,7 +61,7 @@ def main(config):
     #重新设置保存路径，在原始路径下添加时间文件夹
     # save_pth = os.path.join(config.save_dir,config.arch,str(time.localtime()[1])+"-"+str(time.localtime()[2])
     #                         +"-"+str(time.localtime()[3])+"-"+str(time.localtime()[4]))
-    save_pth = os.path.join(config.save_dir,'U_Net','3_U_Net_top2bottom_1')
+    save_pth = os.path.join(config.save_dir,'U_Net','1_U_Net_o')
     if not os.path.exists(save_pth):
         os.makedirs(save_pth)
     

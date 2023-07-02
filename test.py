@@ -2,28 +2,29 @@ import os,cv2,torch
 from tqdm import tqdm
 from utils import compute_mIoU, show_results,test_Dataset,demo_dataset
 import numpy as np
-from model import unet_smp
+from model import U_Net_o,U_Net_dws,U_Net_dws2,U_Net_top2bottom
 from utils import Stitching_images
 from PIL import Image
 
-# 测试集验证
+
 def cal_miou(test_dir,result_dir):                      # ---图像测试集路径和标签路径----#
 
     num_classes = 2                                     # -----------分类个数----------#
     name_classes = ["background", "root"]               # -----------实际类别----------#
     testdata = test_Dataset(test_dir)                   # -----------加载数据集--------#
 
-    if not os.path.exists(os.path.join(result_dir,'mask')):     # -----检测图像保存文件夹是否存在----#
-        os.makedirs(os.path.join(result_dir,'mask'))
-    if not os.path.exists(os.path.join(result_dir,'metric')):
-        os.makedirs(os.path.join(result_dir,'metric'))
+    if not os.path.exists(os.path.join(result_dir,os.path.basename(test_dir),'mask')):     # -----检测图像保存文件夹是否存在----#
+        os.makedirs(os.path.join(result_dir,os.path.basename(test_dir),'mask'))
+    if not os.path.exists(os.path.join(result_dir,os.path.basename(test_dir),'metric')):
+        os.makedirs(os.path.join(result_dir,os.path.basename(test_dir),'metric'))
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')       # --------选择容器-------#
-    net = unet_smp(num_classes = num_classes)                                         # --------加载网络-------#
+    net = U_Net_top2bottom(num_classes = num_classes)                                         # --------加载网络-------#
     net.to(device=device)                                                       # ---将网络拷贝到deivce中--#
-    net.load_state_dict(torch.load(os.path.join(result_dir,"last_model.pth"),   # ------加载模型参数-------#
+    net.load_state_dict(torch.load(os.path.join(result_dir,"min_loss_model.pth"),   # ------加载模型参数-------#
                                        map_location=device)) 
-    
+    # net.load_state_dict(torch.load(os.path.join(result_dir,"epoch_200_model.pth"),   # ------加载模型参数-------#
+    #                                    map_location=device)) 
     image_ids=[]
     net.eval()
     with torch.no_grad():
@@ -40,15 +41,16 @@ def cal_miou(test_dir,result_dir):                      # ---图像测试集路�
             pred = np.array(pred.argmax(axis=0))*255
 
 
-            cv2.imwrite(os.path.join(result_dir,'mask',id+".png"),pred)             # --------保存图像---------#
+            cv2.imwrite(os.path.join(result_dir,os.path.basename(test_dir),'mask',id+".png"),pred)             # --------保存图像---------#
 
     print("Get predict result done.")
 
     gt_dir = os.path.join(test_dir,'anno','test')
-    pred_dir = os.path.join(result_dir,'mask')
-    Stitching_dir = os.path.join(result_dir,'mask_large')
+    pred_dir = os.path.join(result_dir,os.path.basename(test_dir),'mask')
+    if os.path.basename(test_dir)=='mseg_root_data':
+        Stitching_dir = os.path.join(result_dir,os.path.basename(test_dir),'mask_large')
+        Stitching_images(pred_dir,Stitching_dir,512)
 
-    Stitching_images(pred_dir,Stitching_dir,512)    
     print("Stitch images done.")
     
     hist, IoUs, PA_Recall, Precision = compute_mIoU(
@@ -56,12 +58,12 @@ def cal_miou(test_dir,result_dir):                      # ---图像测试集路�
     
     print("Get miou done.")
 
-    if not os.path.exists(os.path.join(result_dir,'metric')):
-        os.makedirs(os.path.join(result_dir,'metric'))
-    show_results(os.path.join(result_dir,'metric'), hist, IoUs,                 # -----生成mIoU的图像------#
+    if not os.path.exists(os.path.join(result_dir,os.path.basename(test_dir),'metric')):
+        os.makedirs(os.path.join(result_dir,os.path.basename(test_dir),'metric'))
+    show_results(os.path.join(result_dir,os.path.basename(test_dir),'metric'), hist, IoUs,                 # -----生成mIoU的图像------#
                  PA_Recall, Precision, name_classes)
 
-# 预测分割小图
+
 def infer(para_path,test_dir,save_path):
     num_classes = 2
     if not os.path.exists(save_path):
@@ -69,7 +71,7 @@ def infer(para_path,test_dir,save_path):
 
     testdata = demo_dataset(test_dir)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')       # --------选择容器-------#
-    net = unet_smp(num_classes = num_classes)                                   # --------加载网络-------#
+    net = U_Net_o(num_classes = num_classes)     #unet_smp  segformer_m                                    # --------加载网络-------#
     net.to(device=device)                                                       # ---将网络拷贝到deivce中--#
     state_dict = torch.load(para_path, map_location=device)
     net.load_state_dict(state_dict) # 从新加载这个模型。
@@ -94,7 +96,8 @@ def infer(para_path,test_dir,save_path):
                 pred = Image.fromarray(pred)
                 pred = pred.convert('L')
                 #调色板
-                palette = [0, 0, 0,0, 255, 0, 255, 0, 0,255,255,255]
+                # palette = [0, 0, 0,0, 255, 0, 255, 0, 0,255,255,255]
+                palette = [0, 0, 0,255,255,255]
                 #着色
                 pred.putpalette(palette)
                 pred.save(os.path.join(save_path,id+".png"))
@@ -107,7 +110,7 @@ def infer2(para_path,test_dir,save_path,num_classes = 2,pixel_shape=512):
 
     testdata = demo_dataset(test_dir)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')       # --------选择容器-------#
-    net = unet_smp(num_classes = num_classes)                                   # --------加载网络-------#
+    net = U_Net_o(num_classes = num_classes)                                   # --------加载网络-------#
     net.to(device=device)                                                       # ---将网络拷贝到deivce中--#
     state_dict = torch.load(para_path, map_location=device)
     net.load_state_dict(state_dict) # 从新加载这个模型。
