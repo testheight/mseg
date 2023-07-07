@@ -4,7 +4,7 @@ import numpy as np
 from tqdm import tqdm
 from torch.cuda.amp import autocast, GradScaler
 
-from model import U_Net_o
+from model import U_Net_o,U_Net_aspp
 from utils import train_Dataset,log_output,fast_hist,per_class_iu,per_class_PA_Recall,per_class_Precision
 from utils import adamw,ExponentialLR,CosLR,CrossEntropy_Loss,focal_loss
 
@@ -24,7 +24,7 @@ def get_arguments():
                         help="Proportion of training datasets.") 
     
     ###### ------------ 设置模型 --------------- ######
-    parser.add_argument("--arch", type=str, default="U_Net_o", 
+    parser.add_argument("--arch", type=str, default="U_Net_aspp", 
                         help="[transunet_m,swinunet_m,deeplabv3p_smp,unet_smp,pspnet_smp,segnet_m,segformer_m]")
     parser.add_argument("--num_classes", type=int, default=2,
                         help="Number of classes to predict (including background).")
@@ -61,7 +61,7 @@ def main(config):
     #重新设置保存路径，在原始路径下添加时间文件夹
     # save_pth = os.path.join(config.save_dir,config.arch,str(time.localtime()[1])+"-"+str(time.localtime()[2])
     #                         +"-"+str(time.localtime()[3])+"-"+str(time.localtime()[4]))
-    save_pth = os.path.join(config.save_dir,'U_Net','1_U_Net_o')
+    save_pth = os.path.join(config.save_dir,'U_Net','5_U_Net_aspp')
     if not os.path.exists(save_pth):
         os.makedirs(save_pth)
     
@@ -130,7 +130,7 @@ def main(config):
         scheduler.step()
 
         #模型验证
-        if len(trainval_dataset) !=0 and (epoch+1) % 10==0:
+        if len(trainval_dataset) !=0 and (epoch+1) % 50==0:
             torch.save(net.state_dict(), os.path.join(save_pth,"epoch_"+str(epoch+1)+'_model.pth'))
             net.eval()
             with torch.no_grad():
