@@ -57,7 +57,12 @@ def main(config):
 
     # 选择设备，有cuda用cuda，没有就用cpu
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
+    if torch.cuda.is_available():
+        num_worker = 9 
+        pin_memory = True
+    else:
+        num_worker = 0
+        pin_memory = False
     #重新设置保存路径，在原始路径下添加时间文件夹
     # save_pth = os.path.join(config.save_dir,config.arch,str(time.localtime()[1])+"-"+str(time.localtime()[2])
     #                         +"-"+str(time.localtime()[3])+"-"+str(time.localtime()[4]))
@@ -75,6 +80,8 @@ def main(config):
     train_dataset, trainval_dataset = torch.utils.data.random_split(all_dataset, [train_size, test_size]) 
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
                                                batch_size=config.batch_size,
+                                                num_workers = num_worker,
+                                                pin_memory = pin_memory,
                                                shuffle=True)
     
     #加载模型
